@@ -27,11 +27,11 @@ interface SidebarProps {
   profileOpen?: boolean;
 }
 
-const Sidebar: React.FC<SidebarProps> = ({ 
-  currentPage, 
-  onPageChange, 
+const Sidebar: React.FC<SidebarProps> = ({
+  currentPage,
+  onPageChange,
   onSignOut,
-  isMobile = false, 
+  isMobile = false,
   isOpen = true,
   onClose,
   theme,
@@ -114,7 +114,7 @@ const Sidebar: React.FC<SidebarProps> = ({
                     className="p-2 rounded-full hover:bg-white/10 focus:outline-none"
                     aria-label="Close Menu"
                   >
-                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6L6 18M6 6l12 12"/></svg>
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6L6 18M6 6l12 12" /></svg>
                   </button>
                 </div>
               </div>
@@ -129,11 +129,10 @@ const Sidebar: React.FC<SidebarProps> = ({
                       animate={{ opacity: 1, y: 0 }}
                       transition={{ delay: index * 0.08 }}
                       onClick={() => handleNavClick(item.id)}
-                      className={`flex items-center w-full transition-colors px-4 py-3 text-left text-base font-medium relative min-h-[48px] ${
-                        isActive
+                      className={`flex items-center w-full transition-colors px-4 py-3 text-left text-base font-medium relative min-h-[48px] ${isActive
                           ? 'border-l-4 border-blue-400 rounded-l-full bg-white/10 text-white dark:text-blue-200'
                           : 'rounded-lg text-gray-200 dark:text-gray-300 hover:bg-white/10 dark:hover:bg-white/10'
-                      }`}
+                        }`}
                       whileTap={{ scale: 0.96 }}
                     >
                       <Icon className="w-6 h-6 mr-3 text-white" />
@@ -168,7 +167,7 @@ const Sidebar: React.FC<SidebarProps> = ({
                     }}
                     className="flex items-center py-3 px-4 w-full rounded-l-full hover:bg-white/10 mt-1 min-h-[48px]"
                   >
-                    <svg xmlns="http://www.w3.org/2000/svg" className="w-6 h-6 mr-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10,17 15,12 10,7"/><line x1="15" y1="12" x2="3" y2="12"/></svg>
+                    <svg xmlns="http://www.w3.org/2000/svg" className="w-6 h-6 mr-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4" /><polyline points="10,17 15,12 10,7" /><line x1="15" y1="12" x2="3" y2="12" /></svg>
                     <span className="text-base text-white font-medium">Login/Signup</span>
                   </motion.button>
                 )}
@@ -216,7 +215,7 @@ const Sidebar: React.FC<SidebarProps> = ({
             )}
           </>
         )}
-        
+
         {/* Contact Support Modal for Mobile */}
         <ContactSupport
           open={contactSupportOpen}
@@ -230,7 +229,7 @@ const Sidebar: React.FC<SidebarProps> = ({
   return (
     <>
       <div className="fixed left-0 top-0 h-full w-20 bg-white dark:bg-black border-r border-gray-200 dark:border-gray-900 flex flex-col items-center py-6">
-        <motion.div 
+        <motion.div
           className="mb-8"
           initial={{ scale: 0 }}
           animate={{ scale: 1 }}
@@ -244,7 +243,7 @@ const Sidebar: React.FC<SidebarProps> = ({
             )}
           </div>
         </motion.div>
-        
+
         <nav className="flex flex-col space-y-4 flex-1">
           {navItems.map((item, index) => {
             const Icon = item.icon;
@@ -255,16 +254,15 @@ const Sidebar: React.FC<SidebarProps> = ({
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: index * 0.1 + 0.2 }}
                 onClick={() => onPageChange(item.id)}
-                className={`w-12 h-12 rounded-xl flex items-center justify-center transition-colors group relative ${
-                  currentPage === item.id 
-                    ? 'bg-gray-900 dark:bg-white text-white dark:text-black' 
+                className={`w-12 h-12 rounded-xl flex items-center justify-center transition-colors group relative ${currentPage === item.id
+                    ? 'bg-gray-900 dark:bg-white text-white dark:text-black'
                     : 'text-gray-500 dark:text-gray-500 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-900'
-                }`}
+                  }`}
                 whileHover={{ scale: 1.1 }}
                 whileTap={{ scale: 0.95 }}
               >
                 <Icon size={20} />
-                
+
                 {/* Tooltip */}
                 <div className="absolute left-16 bg-gray-900 dark:bg-white text-white dark:text-black px-3 py-2 rounded-lg text-sm font-medium opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-50">
                   {item.label}
@@ -287,9 +285,12 @@ const Sidebar: React.FC<SidebarProps> = ({
               />
             )}
           </motion.div>
-          
+
           {/* Contact Support Button */}
           <motion.button
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: navItems.length * 0.1 + 0.2 }}
             onClick={() => setContactSupportOpen(true)}
             className="w-12 h-12 rounded-xl flex items-center justify-center transition-colors group relative text-gray-500 dark:text-gray-500 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-900"
             whileHover={{ scale: 1.1 }}
@@ -303,17 +304,16 @@ const Sidebar: React.FC<SidebarProps> = ({
             </div>
           </motion.button>
         </nav>
-        
+
         <div className="mt-auto space-y-4">
           {user && onSignOut ? (
             <>
               <motion.button
                 onClick={() => setProfileOpenProp(true)}
-                className={`w-12 h-12 rounded-xl flex items-center justify-center transition-colors group relative ${
-                  profileOpen
+                className={`w-12 h-12 rounded-xl flex items-center justify-center transition-colors group relative ${profileOpen
                     ? 'bg-gray-900 dark:bg-white text-white dark:text-black'
                     : 'text-gray-500 dark:text-gray-500 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-900'
-                }`}
+                  }`}
                 whileHover={{ scale: 1.1 }}
                 whileTap={{ scale: 0.95 }}
                 title="Profile"
@@ -380,7 +380,7 @@ const Sidebar: React.FC<SidebarProps> = ({
           )}
         </div>
       </div>
-      
+
       {/* Contact Support Modal */}
       <ContactSupport
         open={contactSupportOpen}
