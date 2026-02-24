@@ -1,9 +1,13 @@
-import { Pool } from 'pg';
+import mongoose from 'mongoose';
 
-const pool = new Pool({
-  connectionString: process.env.SUPABASE_DB_URL,
-  ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
-});
+export async function connectDB() {
+  const mongoUrl = process.env.MONGODB_URL;
+  if (!mongoUrl) {
+    throw new Error('Missing MONGODB_URL environment variable');
+  }
 
-export const query = (text: string, params?: any[]) => pool.query(text, params);
-export { pool }; 
+  await mongoose.connect(mongoUrl);
+  console.log('Connected to MongoDB');
+}
+
+export { mongoose };

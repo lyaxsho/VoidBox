@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { File, FileText, Trash2, Eye, FolderOpen, RotateCcw } from 'lucide-react';
+import { File, FileText, Trash2, Eye, FolderOpen, Download } from 'lucide-react';
 import { FileItem, PageType } from '../types';
 import { BASE_URL } from '../lib/api';
 
@@ -15,19 +15,28 @@ interface LibraryPageProps {
   fetchUserFiles: (userId: string) => Promise<void>;
 }
 
-const LibraryPage: React.FC<LibraryPageProps> = (props) => {
-  console.log('LibraryPage rendered');
+const LibraryPage: React.FC<LibraryPageProps> = ({
+  files,
+  onPageChange,
+  onFileSelect,
+  onFileDelete,
+  theme,
+  user,
+  triggerLoginModal,
+  fetchUserFiles
+}) => {
   const [filter, setFilter] = useState<'all' | 'files' | 'notes'>('all');
   const [confirmDelete, setConfirmDelete] = useState<{ open: boolean; file?: FileItem }>({ open: false });
 
-  const filteredFiles = props.files.filter(file => {
+  const filteredFiles = files.filter(file => {
     if (filter === 'files') return file.type === 'file';
     if (filter === 'notes') return file.type === 'note';
     return true;
   });
 
   const handleFileView = (file: FileItem) => {
-    props.onFileSelect(file);
+    onFileSelect(file);
+    onPageChange('preview');
   };
 
   const formatDate = (date: Date) => {
@@ -43,34 +52,26 @@ const LibraryPage: React.FC<LibraryPageProps> = (props) => {
     setConfirmDelete({ open: true, file });
   };
   const confirmDeleteFile = async () => {
-    if (!props.user?.id || !confirmDelete.file) return;
-    await fetch(`${BASE_URL}/mydrops/${confirmDelete.file.slug}?user_id=${props.user.id}`, { method: 'DELETE' });
-    if (typeof props.fetchUserFiles === 'function') await props.fetchUserFiles(props.user.id);
-    if (typeof props.onPageChange === 'function') props.onPageChange('library');
+    if (!user?.id || !confirmDelete.file) return;
+    const token = localStorage.getItem('voidbox_token');
+    await fetch(`${BASE_URL}/mydrops/${confirmDelete.file.slug}`, {
+      method: 'DELETE',
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    });
+    if (typeof fetchUserFiles === 'function') await fetchUserFiles(user.id);
+    if (typeof onPageChange === 'function') onPageChange('library');
     setConfirmDelete({ open: false });
   };
   const cancelDelete = () => setConfirmDelete({ open: false });
 
-  // Keyboard shortcut for refresh
-  React.useEffect(() => {
-    function handleKeyDown(e: KeyboardEvent) {
-      if (e.ctrlKey && e.altKey && (e.key === 'R' || e.key === 'r')) {
-        e.preventDefault();
-        if (props.user?.id) props.fetchUserFiles(props.user.id);
-      }
-    }
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [props.user, props.fetchUserFiles]);
-
   return (
-    <motion.div 
+    <motion.div
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       className="min-h-screen p-6 md:p-12 bg-white dark:bg-black"
     >
       <div className="max-w-6xl mx-auto">
-        <motion.div 
+        <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.1 }}
@@ -85,52 +86,32 @@ const LibraryPage: React.FC<LibraryPageProps> = (props) => {
             </p>
           </div>
 
-          {/* Filter Tabs + Refresh Button */}
-          <div className="flex items-center gap-4 mt-6 md:mt-0">
-            {/* Refresh Button */}
-            <div className="relative group">
+          {/* Filter Tabs */}
+          <motion.div
+            initial={{ opacity: 0, x: 20 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ delay: 0.2 }}
+            className="flex bg-gray-100 dark:bg-gray-900 rounded-xl p-1 mt-6 md:mt-0"
+          >
+            {[
+              { id: 'all', label: 'All' },
+              { id: 'files', label: 'Files' },
+              { id: 'notes', label: 'Notes' }
+            ].map((tab) => (
               <motion.button
-                onClick={() => window.location.reload()}
-                className="flex items-center justify-center w-11 h-11 rounded-xl bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-white hover:bg-gray-200 dark:hover:bg-gray-800 transition-colors focus:outline-none"
-                whileHover={{ scale: 1.08 }}
-                whileTap={{ scale: 0.97 }}
-                aria-label="Refresh"
-              >
-                <RotateCcw size={22} />
-              </motion.button>
-              {/* Tooltip */}
-              <div className="absolute left-1/2 -translate-x-1/2 top-full mt-2 z-30 px-3 py-1 rounded-lg bg-white text-black text-xs font-semibold shadow-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap border border-gray-200">
-                Re-sync
-              </div>
-            </div>
-            {/* Filter Tabs */}
-            <motion.div 
-              initial={{ opacity: 0, x: 20 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ delay: 0.2 }}
-              className="flex bg-gray-100 dark:bg-gray-900 rounded-xl p-1"
-            >
-              {[
-                { id: 'all', label: 'All' },
-                { id: 'files', label: 'Files' },
-                { id: 'notes', label: 'Notes' }
-              ].map((tab) => (
-                <motion.button
-                  key={tab.id}
-                  onClick={() => setFilter(tab.id as any)}
-                  className={`px-4 py-2 rounded-lg font-medium transition-colors ${
-                    filter === tab.id 
-                      ? 'bg-gray-900 dark:bg-white text-white dark:text-black' 
-                      : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
+                key={tab.id}
+                onClick={() => setFilter(tab.id as any)}
+                className={`px-4 py-2 rounded-lg font-medium transition-colors ${filter === tab.id
+                  ? 'bg-gray-900 dark:bg-white text-white dark:text-black'
+                  : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
                   }`}
-                  whileHover={{ scale: 1.05 }}
-                  whileTap={{ scale: 0.95 }}
-                >
-                  {tab.label}
-                </motion.button>
-              ))}
-            </motion.div>
-          </div>
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+              >
+                {tab.label}
+              </motion.button>
+            ))}
+          </motion.div>
         </motion.div>
 
         <AnimatePresence mode="wait">
@@ -150,7 +131,7 @@ const LibraryPage: React.FC<LibraryPageProps> = (props) => {
               >
                 <FolderOpen className="text-gray-400 dark:text-gray-600" size={32} />
               </motion.div>
-              <motion.h3 
+              <motion.h3
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 transition={{ delay: 0.4 }}
@@ -158,7 +139,7 @@ const LibraryPage: React.FC<LibraryPageProps> = (props) => {
               >
                 Nothing here yet.
               </motion.h3>
-              <motion.p 
+              <motion.p
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 transition={{ delay: 0.5 }}
@@ -167,10 +148,10 @@ const LibraryPage: React.FC<LibraryPageProps> = (props) => {
                 {filter === 'notes'
                   ? 'Create notes to get started.'
                   : filter === 'files'
-                  ? 'Upload files to get started.'
-                  : 'Upload files or create notes to get started.'}
+                    ? 'Upload files to get started.'
+                    : 'Upload files or create notes to get started.'}
               </motion.p>
-              <motion.div 
+              <motion.div
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.6 }}
@@ -178,7 +159,7 @@ const LibraryPage: React.FC<LibraryPageProps> = (props) => {
               >
                 {(filter === 'all' || filter === 'files') && (
                   <motion.button
-                    onClick={() => props.onPageChange('upload')}
+                    onClick={() => onPageChange('upload')}
                     className="bg-gray-900 dark:bg-white text-white dark:text-black px-6 py-3 rounded-xl font-semibold transition-colors"
                     whileHover={{ scale: 1.05 }}
                     whileTap={{ scale: 0.95 }}
@@ -188,7 +169,7 @@ const LibraryPage: React.FC<LibraryPageProps> = (props) => {
                 )}
                 {(filter === 'all' || filter === 'notes') && (
                   <motion.button
-                    onClick={() => props.onPageChange('text')}
+                    onClick={() => onPageChange('text')}
                     className={
                       filter === 'notes'
                         ? 'bg-white text-black px-6 py-3 rounded-xl font-semibold transition-colors dark:bg-white dark:text-black'
@@ -211,7 +192,7 @@ const LibraryPage: React.FC<LibraryPageProps> = (props) => {
             >
               {filteredFiles.map((file, index) => (
                 <motion.div
-                  key={file.id}
+                  key={file.slug || file.id || index}
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: index * 0.1 }}
@@ -220,7 +201,7 @@ const LibraryPage: React.FC<LibraryPageProps> = (props) => {
                   onClick={() => handleFileView(file)}
                 >
                   <div className="flex items-start justify-between mb-4">
-                    <motion.div 
+                    <motion.div
                       className="w-12 h-12 bg-gray-200 dark:bg-gray-800 rounded-xl flex items-center justify-center"
                       whileHover={{ rotate: 5 }}
                     >
@@ -230,17 +211,39 @@ const LibraryPage: React.FC<LibraryPageProps> = (props) => {
                         <File className="text-gray-600 dark:text-gray-400" size={20} />
                       )}
                     </motion.div>
-                    <motion.button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleDelete(file);
-                      }}
-                      className="opacity-0 group-hover:opacity-100 text-gray-400 hover:text-red-500 transition-all"
-                      whileHover={{ scale: 1.1 }}
-                      whileTap={{ scale: 0.9 }}
-                    >
-                      <Trash2 size={16} />
-                    </motion.button>
+                    <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-all">
+                      <motion.button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          const slug = (file as any).slug || file.id;
+                          const token = localStorage.getItem('voidbox_token');
+                          const url = `${BASE_URL}/download/${slug}${token ? `?token=${encodeURIComponent(token)}` : ''}`;
+                          const iframe = document.createElement('iframe');
+                          iframe.style.display = 'none';
+                          iframe.src = url;
+                          document.body.appendChild(iframe);
+                          setTimeout(() => document.body.removeChild(iframe), 10000);
+                        }}
+                        className="p-1.5 rounded-lg bg-green-100 dark:bg-green-900/40 text-green-600 dark:text-green-400 hover:bg-green-200 dark:hover:bg-green-800/60 transition-colors"
+                        whileHover={{ scale: 1.15 }}
+                        whileTap={{ scale: 0.9 }}
+                        title="Download"
+                      >
+                        <Download size={14} />
+                      </motion.button>
+                      <motion.button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleDelete(file);
+                        }}
+                        className="p-1.5 rounded-lg bg-red-100 dark:bg-red-900/40 text-red-500 dark:text-red-400 hover:bg-red-200 dark:hover:bg-red-800/60 transition-colors"
+                        whileHover={{ scale: 1.15 }}
+                        whileTap={{ scale: 0.9 }}
+                        title="Delete"
+                      >
+                        <Trash2 size={14} />
+                      </motion.button>
+                    </div>
                   </div>
 
                   <h3 className="text-gray-900 dark:text-white font-medium mb-2 line-clamp-2">
@@ -285,7 +288,7 @@ const LibraryPage: React.FC<LibraryPageProps> = (props) => {
               Delete File?
             </h2>
             <p className="mb-8 text-gray-700 dark:text-gray-300 text-sm font-normal" style={{ fontFamily: 'inherit' }}>
-              Are you sure you want to delete <span className="font-semibold">{confirmDelete.file?.name}</span>?<br/>
+              Are you sure you want to delete <span className="font-semibold">{confirmDelete.file?.name}</span>?<br />
               <span className="font-bold text-red-500">You won&apos;t be able to recover this file again.</span>
             </p>
             <div className="flex justify-center gap-4">

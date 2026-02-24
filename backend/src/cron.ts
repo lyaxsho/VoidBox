@@ -1,18 +1,25 @@
-import { query } from './db';
-import { deleteFile } from './telegram';
+import { File, UserFile } from './models.js';
+import { connectDB } from './db.js';
 
+// Cleanup expired files from the database
+// Note: files remain in user's Telegram channel (user can delete manually)
 async function cleanupExpiredFiles() {
-  // Find expired files
-  const { rows } = await query('SELECT id, telegram_message_id FROM files WHERE expiry_at IS NOT NULL AND expiry_at < NOW()');
-  for (const file of rows) {
+  await connectDB();
+
+  const expiredFiles = await File.find({
+    expiry_at: { $ne: null, $lt: new Date() }
+  });
+
+  for (const file of expiredFiles) {
     try {
-      await deleteFile(file.telegram_message_id);
-      await query('DELETE FROM files WHERE id = $1', [file.id]);
-      console.log(`Deleted expired file ${file.id}`);
+      // Remove from database (file stays in user's Telegram channel)
+      await UserFile.deleteMany({ slug: file.slug });
+      await File.deleteOne({ _id: file._id });
+      console.log(`Cleaned up expired file ${file._id}`);
     } catch (err) {
-      console.error(`Failed to delete file ${file.id}:`, err);
+      console.error(`Failed to cleanup file ${file._id}:`, err);
     }
   }
 }
 
-cleanupExpiredFiles().then(() => process.exit(0)); 
+cleanupExpiredFiles().then(() => process.exit(0));

@@ -7,15 +7,10 @@ CREATE TABLE IF NOT EXISTS files (
   slug TEXT UNIQUE NOT NULL,
   uploader_ip TEXT NOT NULL,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  telegram_file_id TEXT, -- now nullable
-  telegram_message_id TEXT, -- now nullable
+  telegram_file_id TEXT NOT NULL,
+  telegram_message_id TEXT NOT NULL,
   download_count INTEGER NOT NULL DEFAULT 0,
-  expiry_at TIMESTAMPTZ,
-  is_chunked BOOLEAN NOT NULL DEFAULT FALSE,
-  total_chunks INTEGER,
-  upload_state TEXT NOT NULL DEFAULT 'pending',
-  last_accessed_at TIMESTAMPTZ,
-  public_slug TEXT UNIQUE -- nullable, for public links
+  expiry_at TIMESTAMPTZ
 );
 
 -- Users table (optional, for login)
@@ -44,18 +39,6 @@ CREATE TABLE IF NOT EXISTS user_files (
   size BIGINT NOT NULL,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   notes TEXT,
+  type TEXT DEFAULT 'file',
   FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-); 
-
--- File chunks table for chunked uploads
-CREATE TABLE IF NOT EXISTS file_chunks (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  file_id UUID NOT NULL REFERENCES files(id) ON DELETE CASCADE,
-  chunk_index INTEGER NOT NULL,
-  telegram_file_id TEXT NOT NULL,
-  telegram_message_id TEXT NOT NULL,
-  size BIGINT NOT NULL,
-  checksum TEXT NOT NULL,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  UNIQUE(file_id, chunk_index)
 ); 

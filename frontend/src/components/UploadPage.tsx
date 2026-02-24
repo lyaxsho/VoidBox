@@ -12,15 +12,13 @@ interface UploadPageProps {
   triggerLoginModal?: () => void;
 }
 
-const UploadPage: React.FC<UploadPageProps> = (props) => {
-  console.log('UploadPage rendered');
+const UploadPage: React.FC<UploadPageProps> = ({ onPageChange, onFileAdd, theme, user, triggerLoginModal }) => {
   const [isDragging, setIsDragging] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [fileName, setFileName] = useState('');
   const [notes, setNotes] = useState('');
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
-  const [processing, setProcessing] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [expiryType, setExpiryType] = useState<'none' | 'date' | 'days'>('none');
   const [expiryDate, setExpiryDate] = useState('');
@@ -53,7 +51,7 @@ const UploadPage: React.FC<UploadPageProps> = (props) => {
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
     setIsDragging(false);
-    
+
     const files = Array.from(e.dataTransfer.files);
     if (files.length > 0) {
       setSelectedFile(files[0]);
@@ -70,54 +68,45 @@ const UploadPage: React.FC<UploadPageProps> = (props) => {
   };
 
   const handleUpload = async () => {
-    if (!props.user && props.triggerLoginModal) {
-      props.triggerLoginModal();
+    if (!user && triggerLoginModal) {
+      triggerLoginModal();
       return;
     }
     if (selectedFile) {
+      // Check file size (2GB limit with Local Bot API)
+      const MAX_SIZE = 2 * 1024 * 1024 * 1024; // 2GB
+      if (selectedFile.size > MAX_SIZE) {
+        alert(`File too large! Maximum size is 2GB. Your file is ${(selectedFile.size / 1024 / 1024 / 1024).toFixed(2)}GB.`);
+        return;
+      }
       setUploading(true);
-      setUploadProgress(0);
-      setProcessing(false);
       try {
+
         const options: any = {};
         if (expiryType === 'date' && expiryDate) options.expiry_at = expiryDate;
         if (expiryType === 'days' && expiryDays) options.expiry_days = Number(expiryDays);
-        if (props.user?.id) options.user_id = props.user.id;
-        options.user_email = props.user?.email || props.user?.user_metadata?.email;
-        const isLarge = selectedFile.size > 20 * 1024 * 1024;
-        let progressDone = false;
-        const response = await uploadFile(selectedFile, options, (percent) => {
-          if (!progressDone) {
-            setUploadProgress(percent);
-            if (percent === 100) {
-              progressDone = true;
-              setProcessing(true);
-            }
-          }
+        if (user?.id) options.user_id = user.id;
+        options.onProgress = (progress: number) => setUploadProgress(progress);
+        const response = await uploadFile(selectedFile, options);
+        // Optionally, show the slug or file info to the user here
+        onFileAdd({
+          name: response.file.name,
+          type: 'file',
+          fileType: getFileType(selectedFile),
+          notes: notes || undefined,
+          slug: response.slug,
         });
-        // Wait for backend processing (simulate with timeout for demo, or poll if needed)
-        setProcessing(true);
-        setTimeout(() => {
-          props.onFileAdd({
-            name: response.file.name,
-            type: 'file',
-            fileType: getFileType(selectedFile),
-            notes: notes || undefined,
-            slug: response.slug,
-          });
-          setSelectedFile(null);
-          setFileName('');
-          setNotes('');
-          setUploading(false);
-          setUploadProgress(0);
-          setProcessing(false);
-          props.onPageChange('library');
-        }, isLarge ? 2000 : 1000); // Simulate backend processing time
+        // Reset form
+        setSelectedFile(null);
+        setFileName('');
+        setNotes('');
+        setUploading(false);
+        setUploadProgress(0);
+        // Navigate to library
+        onPageChange('library');
       } catch (err) {
         alert('Upload failed.');
         setUploading(false);
-        setUploadProgress(0);
-        setProcessing(false);
       }
     }
   };
@@ -131,7 +120,7 @@ const UploadPage: React.FC<UploadPageProps> = (props) => {
   };
 
   return (
-    <motion.div 
+    <motion.div
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       className="min-h-screen p-6 md:p-12 bg-white dark:bg-black"
@@ -155,13 +144,12 @@ const UploadPage: React.FC<UploadPageProps> = (props) => {
           initial={{ opacity: 0, scale: 0.95 }}
           animate={{ opacity: 1, scale: 1 }}
           transition={{ delay: 0.2 }}
-          className={`border-2 border-dashed rounded-2xl p-12 text-center transition-all mb-8 ${
-            isDragging 
-              ? 'border-gray-900 dark:border-white bg-gray-50 dark:bg-gray-900' 
-              : selectedFile 
-                ? 'border-green-500 bg-green-50 dark:bg-green-500/5'
-                : 'border-gray-300 dark:border-gray-700 hover:border-gray-400 dark:hover:border-gray-600'
-          }`}
+          className={`border-2 border-dashed rounded-2xl p-12 text-center transition-all mb-8 ${isDragging
+            ? 'border-gray-900 dark:border-white bg-gray-50 dark:bg-gray-900'
+            : selectedFile
+              ? 'border-green-500 bg-green-50 dark:bg-green-500/5'
+              : 'border-gray-300 dark:border-gray-700 hover:border-gray-400 dark:hover:border-gray-600'
+            }`}
           onDragOver={handleDragOver}
           onDragLeave={handleDragLeave}
           onDrop={handleDrop}
@@ -178,7 +166,7 @@ const UploadPage: React.FC<UploadPageProps> = (props) => {
                 <div className="flex items-center justify-center space-x-3">
                   <File className="text-green-500" size={24} />
                   <span className="text-gray-900 dark:text-white font-medium">{selectedFile.name}</span>
-                  <motion.button 
+                  <motion.button
                     onClick={removeFile}
                     className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
                     whileHover={{ scale: 1.1 }}
@@ -231,7 +219,7 @@ const UploadPage: React.FC<UploadPageProps> = (props) => {
         />
 
         {/* File Type Icons */}
-        <motion.div 
+        <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.3 }}
@@ -247,7 +235,7 @@ const UploadPage: React.FC<UploadPageProps> = (props) => {
                 transition={{ delay: 0.4 + index * 0.1 }}
                 className="text-center"
               >
-                <motion.div 
+                <motion.div
                   className="w-12 h-12 bg-gray-100 dark:bg-gray-900 rounded-xl flex items-center justify-center mb-2"
                   whileHover={{ scale: 1.1, rotate: 5 }}
                 >
@@ -260,7 +248,7 @@ const UploadPage: React.FC<UploadPageProps> = (props) => {
         </motion.div>
 
         {/* Form Fields */}
-        <motion.div 
+        <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.4 }}
@@ -293,23 +281,23 @@ const UploadPage: React.FC<UploadPageProps> = (props) => {
           </div>
 
           <div className="mb-4">
-            <label className="block mb-1 font-bold text-lg text-black dark:text-gray-100">Expiry</label>
+            <label className="block mb-1 font-bold text-lg text-gray-100">Expiry</label>
             <div className="flex gap-4 mb-2">
-              <label className="flex items-center gap-1 text-black dark:text-gray-200 text-base font-medium">
-                <input type="radio" name="expiryType" value="none" checked={expiryType==='none'} onChange={()=>setExpiryType('none')} className="w-4 h-4 accent-gray-400" /> No expiry
+              <label className="flex items-center gap-1 text-gray-200 text-base font-medium">
+                <input type="radio" name="expiryType" value="none" checked={expiryType === 'none'} onChange={() => setExpiryType('none')} className="w-4 h-4 accent-gray-400" /> No expiry
               </label>
-              <label className="flex items-center gap-1 text-black dark:text-gray-200 text-base font-medium">
-                <input type="radio" name="expiryType" value="date" checked={expiryType==='date'} onChange={()=>setExpiryType('date')} className="w-4 h-4 accent-gray-400" /> Expiry date
+              <label className="flex items-center gap-1 text-gray-200 text-base font-medium">
+                <input type="radio" name="expiryType" value="date" checked={expiryType === 'date'} onChange={() => setExpiryType('date')} className="w-4 h-4 accent-gray-400" /> Expiry date
               </label>
-              <label className="flex items-center gap-1 text-black dark:text-gray-200 text-base font-medium">
-                <input type="radio" name="expiryType" value="days" checked={expiryType==='days'} onChange={()=>setExpiryType('days')} className="w-4 h-4 accent-gray-400" /> Expiry in days
+              <label className="flex items-center gap-1 text-gray-200 text-base font-medium">
+                <input type="radio" name="expiryType" value="days" checked={expiryType === 'days'} onChange={() => setExpiryType('days')} className="w-4 h-4 accent-gray-400" /> Expiry in days
               </label>
             </div>
-            {expiryType==='date' && (
-              <input type="date" className="border rounded px-2 py-1 bg-black text-gray-100" value={expiryDate} onChange={e=>setExpiryDate(e.target.value)} />
+            {expiryType === 'date' && (
+              <input type="date" className="border rounded px-2 py-1 bg-black text-gray-100" value={expiryDate} onChange={e => setExpiryDate(e.target.value)} />
             )}
-            {expiryType==='days' && (
-              <input type="number" min="1" className="border rounded px-2 py-1 bg-black text-gray-100" value={expiryDays} onChange={e=>setExpiryDays(e.target.value)} placeholder="Days until expiry" />
+            {expiryType === 'days' && (
+              <input type="number" min="1" className="border rounded px-2 py-1 bg-black text-gray-100" value={expiryDays} onChange={e => setExpiryDays(e.target.value)} placeholder="Days until expiry" />
             )}
           </div>
         </motion.div>
@@ -318,13 +306,11 @@ const UploadPage: React.FC<UploadPageProps> = (props) => {
         <motion.button
           onClick={handleUpload}
           disabled={!selectedFile || uploading}
-          className={`w-full relative py-4 rounded-xl font-semibold text-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed
-            ${uploading ? 'bg-black text-white' : 'bg-white text-black border border-gray-900'}`}
-          style={{ overflow: 'hidden' }}
-          whileHover={!selectedFile || uploading ? {} : { 
+          className="w-full bg-gray-900 dark:bg-white text-white dark:text-black py-4 rounded-xl font-semibold text-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+          whileHover={!selectedFile || uploading ? {} : {
             scale: 1.02,
-            boxShadow: props.theme === 'dark' 
-              ? '0 0 30px rgba(255, 255, 255, 0.3)' 
+            boxShadow: theme === 'dark'
+              ? '0 0 30px rgba(255, 255, 255, 0.3)'
               : '0 0 30px rgba(0, 0, 0, 0.3)'
           }}
           whileTap={{ scale: 0.98 }}
@@ -333,29 +319,20 @@ const UploadPage: React.FC<UploadPageProps> = (props) => {
           transition={{ delay: 0.5 }}
         >
           {uploading ? (
-            <>
-              <div className="absolute left-0 top-0 h-full bg-white" style={{ width: `${uploadProgress}%`, opacity: 0.9, transition: 'width 0.2s' }} />
-              <span
-                className="relative z-10 font-semibold flex items-center justify-center w-full"
-                style={{
-                  color: uploadProgress < 45 ? '#fff' : '#000',
-                  textShadow: uploadProgress < 45 ? '0 0 4px #000, 0 0 2px #fff' : 'none',
-                  width: '100%',
-                  justifyContent: 'center',
-                  alignItems: 'center',
-                  display: 'flex',
-                }}
-              >
-                {processing ? (
-                  <span className="flex items-center gap-2 w-full justify-center">
-                    <span>Processing</span>
-                    <span className="w-5 h-5 border-2 border-black border-t-transparent rounded-full animate-spin" />
-                  </span>
-                ) : (
-                  <>Uploading file — {uploadProgress}%</>
-                )}
-              </span>
-            </>
+            <div className="space-y-3">
+              <div className="flex items-center justify-center space-x-2">
+                <div className="w-5 h-5 border-2 border-current border-t-transparent rounded-full animate-spin" />
+                <span>Uploading... {uploadProgress}%</span>
+              </div>
+              <div className="w-full bg-gray-200 dark:bg-gray-800 rounded-full h-2 overflow-hidden">
+                <motion.div
+                  className="h-full bg-gray-900 dark:bg-white rounded-full"
+                  initial={{ width: 0 }}
+                  animate={{ width: `${uploadProgress}%` }}
+                  transition={{ duration: 0.1 }}
+                />
+              </div>
+            </div>
           ) : (
             'Upload Now'
           )}

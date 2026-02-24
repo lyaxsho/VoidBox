@@ -24,10 +24,9 @@ const TextDropPage: React.FC<TextDropPageProps> = ({ onPageChange, onFileAdd, th
     if (content.trim()) {
       setSaving(true);
       try {
-        console.log('UPLOAD DEBUG user:', user);
+
         const options: any = {};
         if (user?.id) options.user_id = user.id;
-        options.user_email = user?.email || user?.user_metadata?.email;
         const response = await uploadNote(title, content, options);
         onFileAdd({
           name: response.file.name,
@@ -47,7 +46,7 @@ const TextDropPage: React.FC<TextDropPageProps> = ({ onPageChange, onFileAdd, th
   };
 
   return (
-    <motion.div 
+    <motion.div
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       className="min-h-screen p-6 md:p-12 bg-white dark:bg-black"
@@ -66,7 +65,7 @@ const TextDropPage: React.FC<TextDropPageProps> = ({ onPageChange, onFileAdd, th
           </p>
         </motion.div>
 
-        <motion.div 
+        <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.2 }}
@@ -107,10 +106,10 @@ const TextDropPage: React.FC<TextDropPageProps> = ({ onPageChange, onFileAdd, th
           onClick={handleSave}
           disabled={!content.trim() || saving}
           className="w-full bg-gray-900 dark:bg-white text-white dark:text-black py-4 rounded-xl font-semibold text-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-          whileHover={!content.trim() || saving ? {} : { 
+          whileHover={!content.trim() || saving ? {} : {
             scale: 1.02,
-            boxShadow: theme === 'dark' 
-              ? '0 0 30px rgba(255, 255, 255, 0.3)' 
+            boxShadow: theme === 'dark'
+              ? '0 0 30px rgba(255, 255, 255, 0.3)'
               : '0 0 30px rgba(0, 0, 0, 0.3)'
           }}
           whileTap={{ scale: 0.98 }}
