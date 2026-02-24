@@ -1,200 +1,85 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
-import { ArrowLeft, Copy, Download, ArrowDown } from 'lucide-react';
-import { PageType } from '../types';
+import { ArrowLeft, Copy, Download } from 'lucide-react';
+import { FileItem, PageType } from '../types';
 import { getFileInfo, getDownloadUrl, BASE_URL } from '../lib/api';
-import { ErrorBoundary } from './ErrorBoundary';
-import { AnimatePresence } from 'framer-motion';
-import { useQuery } from '@tanstack/react-query';
 
 interface FilePreviewPageProps {
-  slug: string;
+  file: FileItem;
   onPageChange: (page: PageType) => void;
   theme: 'dark' | 'light';
-  isPublic?: boolean;
 }
 
-const zipListCache: Record<string, string[]> = {};
-const noteContentCache: Record<string, string> = {};
+const FilePreviewPage: React.FC<FilePreviewPageProps> = ({ file, onPageChange, theme }) => {
 
-function getPublicProxyUrl(slug: string) {
-  return `${BASE_URL}/public-proxy/${slug}`;
-}
-
-function isLargePreviewableType(fileInfo: any) {
-  const type = fileInfo?.mimetype || '';
-  return (
-    type === 'application/zip' ||
-    type === 'application/x-zip-compressed' ||
-    type === 'application/pdf' ||
-    type.startsWith('image/png') ||
-    type.startsWith('video/mp4') ||
-    type.startsWith('audio/mp3')
-  );
-}
-
-const FilePreviewPage: React.FC<FilePreviewPageProps> = ({ slug, onPageChange, theme, isPublic }) => {
+  const [fileInfo, setFileInfo] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [noteContent, setNoteContent] = useState<string | null>(null);
   const [noteLoading, setNoteLoading] = useState(false);
   const [zipList, setZipList] = useState<string[] | null>(null);
   const [zipLoading, setZipLoading] = useState(false);
   const [zipError, setZipError] = useState<string | null>(null);
-  const [publicSlug, setPublicSlug] = useState<string|null>(null);
-  const [isMakingPublic, setIsMakingPublic] = useState(false);
-  const [copiedType, setCopiedType] = useState<'private' | 'public' | null>(null);
-  const [showCopyMenu, setShowCopyMenu] = useState(false);
-  const copyTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const copyMenuRef = useRef<HTMLDivElement>(null);
-
-  const {
-    data: fileInfoRaw,
-    isLoading,
-    isError,
-    error: queryError,
-  } = useQuery({
-    queryKey: [isPublic ? 'publicFileInfo' : 'fileInfo', slug],
-    queryFn: () => isPublic
-      ? fetch(`${BASE_URL}/public/${slug}`).then(res => res.json())
-      : getFileInfo(slug),
-    enabled: Boolean(slug),
-  });
-  const fileInfo = fileInfoRaw as any;
 
   useEffect(() => {
-    setNoteContent(null);
-    setZipList(null);
-    setZipError(null);
-    setCopied(false);
-    setNoteLoading(false);
-    setZipLoading(false);
-  }, [slug]);
+    // Assume file.slug or file.id is the backend slug
+    const slug = (file as any).slug || file.id;
+    setLoading(true);
+    getFileInfo(slug)
+      .then(setFileInfo)
+      .catch((err) => setError('File not found'))
+      .finally(() => setLoading(false));
+  }, [file]);
 
   useEffect(() => {
     if (fileInfo?.mimetype === 'text/plain' && fileInfo.download_url) {
       setNoteLoading(true);
-      if (noteContentCache[slug]) {
-        setNoteContent(noteContentCache[slug]);
-        setNoteLoading(false);
-        return;
-      }
-      fetch(`${BASE_URL}/note-content/${slug}`)
+      // Use backend proxy for note content
+      const slug = (file as any).slug || file.id;
+      const token = localStorage.getItem('voidbox_token');
+      fetch(`${BASE_URL}/note-content/${slug}`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      })
         .then(res => res.text())
-        .then(text => {
-          noteContentCache[slug] = text;
-          setNoteContent(text);
-        })
+        .then(text => setNoteContent(text))
         .finally(() => setNoteLoading(false));
     } else {
       setNoteContent(null);
     }
-  }, [fileInfo, slug]);
+  }, [fileInfo]);
 
   function isZipMimetype(mimetype: string | undefined) {
     return mimetype === 'application/zip' || mimetype === 'application/x-zip-compressed';
   }
 
   useEffect(() => {
-    if (!isZipMimetype(fileInfo?.mimetype)) {
-      setZipList(null);
-      setZipError(null);
-      setZipLoading(false);
-      return;
-    }
-    if (zipListCache[slug]) {
-      setZipList(zipListCache[slug]);
-      setZipLoading(false);
-      return;
-    }
-    if (isZipMimetype(fileInfo?.mimetype) && fileInfo?.download_url && !fileInfo?.is_chunked && Number(fileInfo?.size) <= 20 * 1024 * 1024) {
+    if (isZipMimetype(fileInfo?.mimetype) && fileInfo?.download_url) {
       setZipLoading(true);
       setZipError(null);
-      fetch(`${BASE_URL}/zip-list/${slug}`)
+      const slug = (file as any).slug || file.id;
+      const token = localStorage.getItem('voidbox_token');
+      fetch(`${BASE_URL}/zip-list/${slug}`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      })
         .then(res => res.json())
         .then(data => {
-          const list = data.entries ?? data.files ?? [];
-          zipListCache[slug] = list;
-          setZipList(list);
+
+          setZipList(data.files || []);
+          setZipLoading(false);
         })
-        .catch(() => setZipError('Could not fetch ZIP contents.'))
-        .finally(() => setZipLoading(false));
+        .catch((err) => {
+          console.error('ZIP list fetch error:', err);
+          setZipList(null);
+          setZipError('Failed to load ZIP file list.');
+          setZipLoading(false);
+        });
     } else {
       setZipList(null);
       setZipError(null);
       setZipLoading(false);
     }
-  }, [fileInfo, slug]);
-
-  useEffect(() => {
-    if (fileInfo?.public_slug) {
-      setPublicSlug(fileInfo.public_slug);
-    } else {
-      setPublicSlug(null);
-    }
   }, [fileInfo]);
-
-  useEffect(() => {
-    function handleClickOutside(e: MouseEvent) {
-      if (copyMenuRef.current && !copyMenuRef.current.contains(e.target as Node)) {
-        setShowCopyMenu(false);
-      }
-    }
-    if (showCopyMenu) {
-      document.addEventListener('mousedown', handleClickOutside);
-    } else {
-      document.removeEventListener('mousedown', handleClickOutside);
-    }
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, [showCopyMenu]);
-
-  const makePublic = async () => {
-    setIsMakingPublic(true);
-    try {
-      const resp = await fetch(`${BASE_URL}/file/${slug}/publicize`, {
-        method: 'POST',
-        credentials: 'include',
-      });
-      const data = await resp.json();
-      setPublicSlug(data.publicSlug);
-    } finally {
-      setIsMakingPublic(false);
-    }
-  };
-
-  const privateLink = `${window.location.origin}/file/${slug}`;
-  const publicLink = publicSlug ? getPublicProxyUrl(publicSlug) : '';
-
-  const handleCopy = async (type: 'private' | 'public') => {
-    if (copyTimeoutRef.current) clearTimeout(copyTimeoutRef.current);
-    if (type === 'private') {
-      navigator.clipboard.writeText(privateLink);
-      setCopiedType(type);
-    } else if (type === 'public') {
-      if (!publicSlug) {
-        setIsMakingPublic(true);
-        try {
-          const resp = await fetch(`${BASE_URL}/file/${slug}/publicize`, {
-            method: 'POST',
-            credentials: 'include',
-          });
-          const data = await resp.json();
-          setPublicSlug(data.publicSlug);
-          const link = getPublicProxyUrl(data.publicSlug);
-          navigator.clipboard.writeText(link);
-          setCopiedType(type);
-        } finally {
-          setIsMakingPublic(false);
-        }
-      } else {
-        navigator.clipboard.writeText(publicLink);
-        setCopiedType(type);
-      }
-    }
-    copyTimeoutRef.current = setTimeout(() => {
-      setCopiedType(null);
-      setShowCopyMenu(false);
-    }, 1200);
-  };
 
   const formatDate = (date: string | Date) => {
     return new Intl.DateTimeFormat('en-US', {
@@ -207,6 +92,7 @@ const FilePreviewPage: React.FC<FilePreviewPageProps> = ({ slug, onPageChange, t
   };
 
   const copyLink = () => {
+    const slug = (file as any).slug || file.id;
     const link = `${window.location.origin}/file/${slug}`;
     navigator.clipboard.writeText(link).then(() => {
       setCopied(true);
@@ -216,85 +102,62 @@ const FilePreviewPage: React.FC<FilePreviewPageProps> = ({ slug, onPageChange, t
 
   const handleDownload = () => {
     if (!fileInfo) return;
-    window.open(isPublic ? getPublicProxyUrl(slug) : getDownloadUrl(slug), '_blank');
+    // Hidden iframe triggers native Chrome download via Content-Disposition: attachment
+    // Works cross-origin unlike <a download>, doesn't navigate away unlike location.assign
+    const iframe = document.createElement('iframe');
+    iframe.style.display = 'none';
+    iframe.src = getDownloadUrl((file as any).slug || file.id);
+    document.body.appendChild(iframe);
+    setTimeout(() => document.body.removeChild(iframe), 10000);
   };
 
   // Preview rendering
+  const MAX_PREVIEW_SIZE = 20 * 1024 * 1024; // 20MB
+  const tooLargeToPreview = fileInfo?.size > MAX_PREVIEW_SIZE;
   let preview: React.ReactNode = null;
-  const isOver20MB = Number(fileInfo?.size) > 20 * 1024 * 1024;
-  const isPreviewableType = isLargePreviewableType(fileInfo);
-  if (isOver20MB && isPreviewableType) {
-    preview = (
-      <div className="flex flex-col items-center justify-center mb-4 mt-12">
-        <span className="italic text-gray-400">Preview is not available for files over 20MB.</span>
-        <span className="italic text-red-500 mt-2">Public link won’t work for this file.</span>
-      </div>
-    );
-  } else if (fileInfo?.is_chunked || !fileInfo?.mimetype || (!fileInfo?.mimetype.startsWith('image/') && !fileInfo?.mimetype.startsWith('video/') && !fileInfo?.mimetype.startsWith('audio/') && fileInfo?.mimetype !== 'application/pdf' && fileInfo?.mimetype !== 'text/plain' && !isZipMimetype(fileInfo?.mimetype))) {
-    preview = (
-      <div className="flex flex-col items-center justify-center mb-4 mt-12">
-        <span className="italic text-gray-400">No preview available for this file type.</span>
-        {isOver20MB && (
-          <span className="italic text-red-500 mt-2">Public link won’t work for this file.</span>
-        )}
-      </div>
-    );
+  const slug = (file as any).slug || file.id;
+  if (tooLargeToPreview) {
+    preview = <div className="mx-auto max-w-lg text-center text-gray-400 italic mb-6">File is too large to preview (over 20MB). Use the Download button.</div>;
   } else if (fileInfo?.mimetype?.startsWith('image/')) {
-    preview = <img src={isPublic ? getPublicProxyUrl(slug) : getDownloadUrl(slug)} alt={fileInfo.name} className={`mx-auto max-h-96 rounded-xl mb-6${theme === 'dark' ? ' bg-white' : ''}`} style={theme === 'dark' ? { backgroundColor: 'white' } : {}} />;
+    preview = <img src={getDownloadUrl(slug)} alt={fileInfo.name} className={`mx-auto max-h-96 rounded-xl mb-6${theme === 'dark' ? ' bg-white' : ''}`} style={theme === 'dark' ? { backgroundColor: 'white' } : {}} />;
   } else if (fileInfo?.mimetype?.startsWith('video/')) {
-    preview = <video src={isPublic ? getPublicProxyUrl(slug) : getDownloadUrl(slug)} controls className={`mx-auto max-h-96 rounded-xl mb-6${theme === 'dark' ? ' bg-white' : ''}`} style={theme === 'dark' ? { backgroundColor: 'white' } : {}} />;
+    preview = <video src={getDownloadUrl(slug)} controls className={`mx-auto max-h-96 rounded-xl mb-6${theme === 'dark' ? ' bg-white' : ''}`} style={theme === 'dark' ? { backgroundColor: 'white' } : {}} />;
   } else if (fileInfo?.mimetype?.startsWith('audio/')) {
     preview = (
       <audio controls className={`mx-auto w-full max-w-2xl mb-6${theme === 'dark' ? ' bg-white text-black' : ''}`} style={theme === 'dark' ? { backgroundColor: 'white', color: 'black' } : {}}>
-        <source src={isPublic ? getPublicProxyUrl(slug) : getDownloadUrl(slug)} type={fileInfo.mimetype} />
+        <source src={getDownloadUrl(slug)} type={fileInfo.mimetype} />
         Your browser does not support the audio element.
       </audio>
     );
   } else if (fileInfo?.mimetype === 'application/pdf') {
     preview = (
       <iframe
-        src={isPublic ? getPublicProxyUrl(slug) : getDownloadUrl(slug)}
+        src={getDownloadUrl(slug)}
         className={`mx-auto w-full h-96 rounded-xl mb-6${theme === 'dark' ? ' bg-white text-black' : ' bg-white'}`}
         title="PDF Preview"
         style={theme === 'dark' ? { border: 'none', backgroundColor: 'white', color: 'black' } : { border: 'none' }}
         allow="autoplay"
       >
-        <p>Your browser does not support PDF preview. <a href={isPublic ? getPublicProxyUrl(slug) : getDownloadUrl(slug)} target="_blank" rel="noopener noreferrer">Download PDF</a></p>
+        <p>Your browser does not support PDF preview. <a href={getDownloadUrl(slug)} target="_blank" rel="noopener noreferrer">Download PDF</a></p>
       </iframe>
     );
   } else if (isZipMimetype(fileInfo?.mimetype)) {
-    if (fileInfo?.is_chunked || Number(fileInfo?.size) > 20 * 1024 * 1024) {
-      preview = (
-        <div className="flex items-center justify-center mb-4 mt-12">
-          <span className="italic text-gray-400">No preview available for zip files.</span>
-        </div>
-      );
-    } else if (zipLoading) {
-      preview = (
-        <div className="flex items-center justify-center mb-4 mt-12">
-          <span className="italic text-gray-400">Loading ZIP contents...</span>
-        </div>
-      );
+    if (zipLoading) {
+      preview = <div className="mx-auto text-center text-gray-400 mb-6">Loading ZIP contents...</div>;
     } else if (zipError) {
+      preview = <div className="mx-auto text-center text-red-400 mb-6">{zipError}</div>;
+    } else if (zipList) {
       preview = (
-        <div className="flex items-center justify-center mb-4 mt-12">
-          <span className="italic text-red-400">{zipError}</span>
-        </div>
-      );
-    } else if (Array.isArray(zipList)) {
-      preview = (
-        <div
-          className={`mx-auto w-full max-w-2xl p-6 rounded-2xl text-left select-text ${theme === 'dark' ? 'bg-white text-black' : 'bg-black text-white'}`}
-          style={{ userSelect: 'text', fontFamily: 'inherit' }}
+        <div className={`mx-auto w-full max-w-2xl rounded-xl mb-6 p-6${theme === 'dark' ? ' bg-white text-black' : ' bg-gray-900 text-white'}`}
         >
-          <div className="font-bold mb-2">ZIP Contents:</div>
-          <pre className="whitespace-pre-wrap break-all m-0 p-0 bg-transparent border-none" style={{ fontFamily: 'inherit' }}>
-            {zipList.length > 0
-              ? zipList.map((f, i) => `• ${f}${i < zipList.length - 1 ? '\n' : ''}`).join('')
-              : 'No files found in ZIP.'}
-          </pre>
+          <h3 className="font-bold mb-2">ZIP Contents:</h3>
+          <ul className="list-disc pl-6">
+            {zipList.length > 0 ? zipList.map((f, i) => <li key={i}>{f}</li>) : <li>No files found in ZIP.</li>}
+          </ul>
         </div>
       );
+    } else {
+      preview = <div className="mx-auto text-center text-gray-400 mb-6">No preview available for this ZIP file.</div>;
     }
   } else if (fileInfo?.mimetype === 'text/plain') {
     preview = noteLoading ? (
@@ -321,53 +184,29 @@ const FilePreviewPage: React.FC<FilePreviewPageProps> = ({ slug, onPageChange, t
       })()
     );
   } else {
-    preview = (
-      <div className="flex items-center justify-center mb-4 mt-12">
-        <span className="italic text-gray-400">No preview available for this file type.</span>
-        </div>
-    );
-  }
-  if (!preview) {
-    preview = (
-      <div className="mx-auto text-center text-gray-400 mb-6">
-        Unable to generate preview. Try downloading the file.
-      </div>
-    );
+    preview = <div className="mx-auto max-w-lg text-center text-gray-400 italic mb-6">No preview available for this file type.</div>;
   }
 
-  if (isLoading) return <div className="p-8 text-center text-gray-500 bg-white dark:bg-black">Loading...</div>;
-  if (isError) return <div className="p-8 text-center text-red-500 bg-white dark:bg-black">{queryError instanceof Error ? queryError.message : 'Error loading file info.'}</div>;
-  if (!fileInfo || typeof fileInfo !== 'object') {
-    return (
-      <div className="p-8 text-center text-red-500 bg-white dark:bg-black">
-        Unable to load file information. Please try again later or return to the library.
-      </div>
-    );
-  }
+  // Debug log for note preview
 
-  function formatFileSize(size: number | string | undefined) {
-    const n = typeof size === 'string' ? parseFloat(size) : size;
-    if (typeof n !== 'number' || isNaN(n) || n < 0) return '';
-    if (n === 0) return '0 bytes';
-    if (n >= 1024 * 1024) return `${(n / (1024 * 1024)).toFixed(2)} MB`;
-    if (n >= 1024) return `${(n / 1024).toFixed(2)} KB`;
-    return `${n} bytes`;
-  }
+
+  if (loading) return <div className="p-8 text-center text-gray-500">Loading...</div>;
+  if (error) return <div className="p-8 text-center text-red-500">{error}</div>;
 
   return (
-    <motion.div 
+    <motion.div
       initial={{ opacity: 0, x: 300 }}
       animate={{ opacity: 1, x: 0 }}
       exit={{ opacity: 0, x: 300 }}
       transition={{ type: "spring", stiffness: 300, damping: 30 }}
-      className="p-2 sm:p-6 md:p-12 bg-white dark:bg-black min-h-screen"
+      className="min-h-screen p-6 md:p-12 bg-white dark:bg-black"
     >
-      <div className="w-full max-w-4xl mx-auto px-2 sm:px-6">
+      <div className="max-w-4xl mx-auto">
         {/* Header */}
-        <motion.div 
+        <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          className="flex flex-col md:flex-row items-center md:justify-between mb-8 space-y-4 md:space-y-0 md:space-x-4"
+          className="flex items-center justify-between mb-8"
         >
           <motion.button
             onClick={() => onPageChange('library')}
@@ -379,79 +218,49 @@ const FilePreviewPage: React.FC<FilePreviewPageProps> = ({ slug, onPageChange, t
             <span>Back to Library</span>
           </motion.button>
 
-          <div className="flex space-x-3 relative">
-            <div className="relative" ref={copyMenuRef}>
-              <motion.button
-                className={`flex items-center justify-center bg-black text-white px-7 py-4 rounded-xl hover:bg-gray-900 transition-colors focus:outline-none relative text-lg font-medium w-full`}
-                style={{ minWidth: 180, height: 60 }}
-                onClick={() => setShowCopyMenu((v) => !v)}
-                aria-haspopup="true"
-                aria-expanded={showCopyMenu}
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
-              >
-                <span className="flex items-center justify-center w-full">Copy Link<ArrowDown size={22} className="ml-2 -mr-1" /></span>
-              </motion.button>
-              {showCopyMenu && (
-                <div className="absolute left-0 top-full mt-2 flex flex-col z-20 w-52 bg-black rounded-xl shadow-lg border border-gray-800">
-                  <motion.button
-                    onClick={() => handleCopy('private')}
-                    className={`flex items-center justify-between px-6 py-4 text-left rounded-t-xl hover:bg-gray-900 transition-colors focus:outline-none w-full text-lg font-medium text-white ${copiedType === 'private' ? 'ring-2 ring-blue-500' : ''}`}
-                    style={{ minHeight: 56 }}
-                    whileHover={{ scale: 1.05 }}
-                    whileTap={{ scale: 0.95 }}
-                  >
-                    <span>Private Link</span>
-                    <Copy size={20} className="ml-3" />
-                  </motion.button>
-                  <motion.button
-                    onClick={() => handleCopy('public')}
-                    disabled={isMakingPublic}
-                    className={`flex items-center justify-between px-6 py-4 text-left rounded-b-xl hover:bg-gray-900 transition-colors focus:outline-none w-full text-lg font-medium text-white ${isMakingPublic ? 'opacity-50 cursor-wait' : ''} ${copiedType === 'public' ? 'ring-2 ring-green-500' : ''}`}
-                    style={{ minHeight: 56 }}
-                    whileHover={{ scale: 1.05 }}
-                    whileTap={{ scale: 0.95 }}
-                  >
-                    <span>{isMakingPublic ? 'Making Public…' : 'Public Link'}</span>
-                    <Copy size={20} className="ml-3" />
-                  </motion.button>
-                </div>
-              )}
-            </div>
-            <motion.button 
-              onClick={handleDownload}
-              className="flex items-center justify-between bg-white text-black px-6 py-3 rounded-xl hover:bg-gray-100 transition-colors text-lg font-medium"
-              style={{ minWidth: 180, height: 56 }}
+          <div className="flex space-x-3">
+            <motion.button
+              onClick={copyLink}
+              className="flex items-center space-x-2 bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-white px-4 py-2 rounded-xl hover:bg-gray-200 dark:hover:bg-gray-800 transition-colors"
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
             >
+              <Copy size={16} />
+              <span>{copied ? 'Copied!' : 'Copy Link'}</span>
+            </motion.button>
+            <motion.button
+              onClick={handleDownload}
+              className="flex items-center space-x-2 bg-gray-900 dark:bg-white text-white dark:text-black px-4 py-2 rounded-xl hover:bg-gray-800 dark:hover:bg-gray-100 transition-colors"
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+            >
+              <Download size={16} />
               <span>Download</span>
-              <Download size={22} className="ml-3" />
             </motion.button>
           </div>
         </motion.div>
 
         {/* File Info */}
-        <motion.div 
+        <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.1 }}
           className="mb-8"
         >
-          <h1 className="text-2xl sm:text-3xl font-light text-gray-900 dark:text-white mb-2 break-words overflow-hidden" style={{ fontFamily: 'Playfair Display, serif' }}>
-            {fileInfo?.name}
+          <h1 className="text-3xl font-light text-gray-900 dark:text-white mb-2" style={{ fontFamily: 'Playfair Display, serif' }}>
+            {fileInfo?.name || file.name}
           </h1>
-          <p className="text-gray-600 dark:text-gray-400 break-words">
-            Uploaded on {fileInfo?.created_at ? formatDate(fileInfo.created_at) : ''}
+          <p className="text-gray-600 dark:text-gray-400">
+            Uploaded on {fileInfo?.created_at ? formatDate(fileInfo.created_at) : formatDate(file.uploadedAt)}
           </p>
-          {fileInfo?.notes && (
-            <motion.p 
+          {file.notes && (
+            <motion.p
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               transition={{ delay: 0.2 }}
               className="text-gray-700 dark:text-gray-300 mt-2"
             >
-              {fileInfo.notes}
+              {file.notes}
             </motion.p>
           )}
         </motion.div>
@@ -460,14 +269,13 @@ const FilePreviewPage: React.FC<FilePreviewPageProps> = ({ slug, onPageChange, t
         {preview}
 
         {/* Content */}
-        <div className={`rounded-2xl p-8 text-center ${theme === 'dark' ? 'bg-black text-white' : 'bg-white text-black'}`}> 
-          <div className={`${theme === 'dark' ? 'text-white' : 'text-black'} mb-2`}>Size: {formatFileSize(fileInfo?.size)}</div>
+        <div className={`rounded-2xl p-8 text-center ${theme === 'dark' ? 'bg-black' : 'bg-white'}`}>
+          <div className={`${theme === 'dark' ? 'text-white' : 'text-black'} mb-2`}>Size: {fileInfo?.size} bytes</div>
           <div className={`${theme === 'dark' ? 'text-white' : 'text-black'} mb-2`}>MIME: {fileInfo?.mimetype}</div>
           <div className={`${theme === 'dark' ? 'text-white' : 'text-black'} mb-2`}>
             Expiry: {fileInfo?.expiry_at ? formatDate(fileInfo.expiry_at) : <span title="Never expires">&#8734;</span>}
           </div>
         </div>
-
       </div>
     </motion.div>
   );

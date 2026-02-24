@@ -3,11 +3,6 @@
 @tailwind components;
 @tailwind utilities;
 
-html, body, #root {
-  height: 100%;
-  background-color: white;
-}
-
 @layer base {
   * {
     font-family: 'Inter', system-ui, -apple-system, sans-serif;
@@ -50,38 +45,28 @@ html, body, #root {
 
 /* Custom scrollbar */
 ::-webkit-scrollbar {
-  width: 8px;
-  background: #fff; /* White background for scrollbar area in light mode */
+  width: 6px;
 }
 
 ::-webkit-scrollbar-track {
-  background: #fff; /* White track for light mode */
+  background: transparent;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #bbb; /* Light gray thumb for visibility on black */
-  border-radius: 6px;
-  min-height: 40px;
-}
-
-.dark ::-webkit-scrollbar {
-  background: #000;
-}
-
-.dark ::-webkit-scrollbar-track {
-  background: #000;
+  background: #d1d5db;
+  border-radius: 3px;
 }
 
 .dark ::-webkit-scrollbar-thumb {
-  background: #bbb; /* White thumb for dark mode */
+  background: #374151;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #888;
+  background: #9ca3af;
 }
 
 .dark ::-webkit-scrollbar-thumb:hover {
-  background: #eee;
+  background: #4b5563;
 }
 
 @keyframes theme-circle {
@@ -130,9 +115,4 @@ html, body, #root {
 ::selection {
   background: #888;
   color: #fff;
-}
-
-.policy-detail {
-  @apply text-sm text-gray-400;
-  font-style: normal;
 }

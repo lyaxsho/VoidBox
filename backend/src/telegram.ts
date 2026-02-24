@@ -1,67 +1,158 @@
-import { Telegraf } from 'telegraf';
-import axios from 'axios';
+import { TelegramClient, Api } from 'telegram';
+import { StringSession } from 'telegram/sessions/index.js';
 import { TelegramFileInfo } from './types.js';
-import FormData from 'form-data';
+import bigInt from 'big-integer';
 
-const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
-const CHANNEL_ID = process.env.TELEGRAM_CHANNEL_ID;
-if (!BOT_TOKEN) throw new Error('TELEGRAM_BOT_TOKEN env variable is required');
-if (!CHANNEL_ID) throw new Error('TELEGRAM_CHANNEL_ID env variable is required');
-const API_URL = `https://api.telegram.org/bot${BOT_TOKEN}`;
+const TG_API_ID = parseInt(process.env.TG_API_ID || '0', 10);
+const TG_API_HASH = process.env.TG_API_HASH || '';
 
-const bot = new Telegraf(BOT_TOKEN);
-
-export async function sendFileToChannel(fileBuffer: Buffer, filename: string, mimetype: string): Promise<TelegramFileInfo> {
-  const formData = new FormData();
-  formData.append('chat_id', CHANNEL_ID);
-  let endpoint = 'sendDocument';
-  let fileField = 'document';
-  if (mimetype && mimetype.startsWith('video/')) {
-    endpoint = 'sendVideo';
-    fileField = 'video';
-  } else if (mimetype && mimetype.startsWith('audio/')) {
-    endpoint = 'sendAudio';
-    fileField = 'audio';
-  } else if (mimetype && mimetype.startsWith('image/')) {
-    endpoint = 'sendPhoto';
-    fileField = 'photo';
-  }
-  formData.append(fileField, fileBuffer, { filename, contentType: mimetype });
-
-  const res = await axios.post(`${API_URL}/${endpoint}`, formData, {
-    headers: formData.getHeaders(),
-    maxContentLength: Infinity,
-    maxBodyLength: Infinity,
+// Create a GramJS client from a session string
+export function createClient(sessionStr: string): TelegramClient {
+  const session = new StringSession(sessionStr);
+  const client = new TelegramClient(session, TG_API_ID, TG_API_HASH, {
+    connectionRetries: 3,
   });
-  console.log('TELEGRAM API RESPONSE:', res.data);
-  if (!res.data.ok) {
-    throw new Error('Telegram API error: ' + (res.data.description || 'Unknown error'));
+  // Suppress noisy TIMEOUT errors from the update loop.
+  // _updateLoop is a standalone function — we can't override it on the instance.
+  // Instead, intercept errors via _errorHandler so they never reach console.error.
+  (client as any)._errorHandler = async (err: any) => {
+    const msg: string = err?.message || String(err);
+    if (msg.includes('TIMEOUT')) return; // silently swallow ping timeouts
+    console.error('[Telegram]', msg);
+  };
+  return client;
+}
+
+// Create VoidBox Drive channel for a user — returns the channel ID
+export async function createDriveChannel(client: TelegramClient): Promise<number> {
+  const result = await client.invoke(
+    new Api.channels.CreateChannel({
+      title: 'VoidBox Drive',
+      about: 'Personal cloud storage powered by VoidBox',
+      megagroup: false,
+    })
+  );
+
+  const updates = result as any;
+  const channel = updates.chats?.[0];
+  if (!channel || !channel.id) {
+    throw new Error('Failed to create channel');
   }
-  const msg = res.data.result;
-  // Support all possible file response types
-  let fileObj = msg.document || msg.video || msg.audio;
-  if (!fileObj && msg.photo) {
-    fileObj = Array.isArray(msg.photo) ? msg.photo[msg.photo.length - 1] : msg.photo;
+
+  return typeof channel.id === 'bigint' ? Number(channel.id) : Number(channel.id);
+}
+
+// Upload a file to the user's channel
+export async function sendFileToChannel(
+  client: TelegramClient,
+  channelId: number,
+  fileBuffer: Buffer,
+  filename: string,
+  mimetype: string,
+): Promise<TelegramFileInfo> {
+  const peer = new Api.PeerChannel({ channelId: bigInt(channelId) });
+  const inputPeer = await client.getInputEntity(peer);
+
+  // Use client.sendFile with CustomFile wrapper
+  const { CustomFile } = await import('telegram/client/uploads.js');
+
+  // For large files (>20MB), gramJS tries to use filePath instead of buffer.
+  // Write to a temp file to avoid "buffer or filePath should be specified" error.
+  const os = await import('os');
+  const fs = await import('fs');
+  const pathMod = await import('path');
+  const tmpPath = pathMod.default.join(os.default.tmpdir(), `voidbox_upload_${Date.now()}_${filename}`);
+
+  let customFile: InstanceType<typeof CustomFile>;
+  try {
+    fs.writeFileSync(tmpPath, fileBuffer);
+    customFile = new CustomFile(filename, fileBuffer.length, tmpPath);
+  } catch {
+    // Fallback: try with buffer directly
+    customFile = new CustomFile(filename, fileBuffer.length, '', fileBuffer);
   }
-  if (!fileObj) {
-    throw new Error('Telegram API: No file object found in response');
+
+  let result: any;
+  try {
+    result = await client.sendFile(inputPeer, {
+      file: customFile,
+      forceDocument: true,
+    });
+  } finally {
+    // Clean up temp file
+    try { fs.unlinkSync(tmpPath); } catch { }
   }
+
+  const messageId = result?.id || result?.message?.id;
+  const media = result?.media;
+  let fileId = '';
+  let fileUniqueId = '';
+
+  if (media?.photo) {
+    fileId = String(media.photo.id);
+    fileUniqueId = String(media.photo.id);
+  } else if (media?.document) {
+    fileId = String(media.document.id);
+    fileUniqueId = String(media.document.id);
+  }
+
   return {
-    file_id: fileObj.file_id,
-    message_id: msg.message_id,
-    file_unique_id: fileObj.file_unique_id,
+    file_id: fileId,
+    message_id: String(messageId),
+    file_unique_id: fileUniqueId,
   };
 }
 
-export async function getFileInfo(file_id: string): Promise<{ file_path: string }> {
-  const res = await axios.get(`${API_URL}/getFile?file_id=${file_id}`);
-  return res.data.result;
+// Download a file from the user's channel
+export async function downloadFile(
+  client: TelegramClient,
+  channelId: number,
+  messageId: number,
+): Promise<Buffer> {
+  const peer = new Api.PeerChannel({ channelId: bigInt(channelId) });
+  const inputPeer = await client.getInputEntity(peer);
+
+  // Get the message containing the file
+  const result = await client.invoke(
+    new Api.channels.GetMessages({
+      channel: inputPeer as any,
+      id: [new Api.InputMessageID({ id: messageId })],
+    })
+  );
+
+  const messages = (result as any).messages;
+  if (!messages || messages.length === 0) {
+    throw new Error('Message not found');
+  }
+
+  const message = messages[0];
+  if (!message.media) {
+    throw new Error('Message has no media');
+  }
+
+  const buffer = await client.downloadMedia(message, {}) as Buffer;
+  if (!buffer) {
+    throw new Error('Failed to download file');
+  }
+
+  return buffer;
 }
 
-export async function deleteFile(message_id: string): Promise<boolean> {
-  const res = await axios.post(`${API_URL}/deleteMessage`, {
-    chat_id: CHANNEL_ID,
-    message_id,
-  });
-  return res.data.ok;
-} 
+// Delete a message from the user's channel
+export async function deleteMessage(
+  client: TelegramClient,
+  channelId: number,
+  messageId: number,
+): Promise<boolean> {
+  const peer = new Api.PeerChannel({ channelId: bigInt(channelId) });
+  const inputPeer = await client.getInputEntity(peer);
+
+  await client.invoke(
+    new Api.channels.DeleteMessages({
+      channel: inputPeer as any,
+      id: [messageId],
+    })
+  );
+
+  return true;
+}

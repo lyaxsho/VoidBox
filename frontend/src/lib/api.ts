@@ -14,44 +14,51 @@ export interface UploadResponse {
 
 export async function uploadFile(
   file: File,
-  options: any = {},
-  onProgress?: (percent: number) => void
-): Promise<any> {
-  const formData = new FormData();
-  formData.append('file', file);
-  if (options.expiry_at) formData.append('expiry_at', options.expiry_at);
-  if (options.expiry_days) formData.append('expiry_days', options.expiry_days);
-  if (options.user_id) formData.append('user_id', options.user_id);
-  if (options.user_email) formData.append('user_email', options.user_email);
-  if (options.notes) formData.append('notes', options.notes);
-
+  options?: {
+    expiry_at?: string;
+    expiry_days?: number;
+    user_id?: string;
+    onProgress?: (progress: number) => void;
+  }
+): Promise<UploadResponse> {
   return new Promise((resolve, reject) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    if (options?.expiry_at) formData.append('expiry_at', options.expiry_at);
+    if (options?.expiry_days) formData.append('expiry_days', String(options.expiry_days));
+    if (options?.user_id) formData.append('user_id', options.user_id);
+
     const xhr = new XMLHttpRequest();
-    xhr.open('POST', `${BASE_URL}/upload-auto`);
-    xhr.upload.onprogress = function (event) {
-      if (event.lengthComputable && onProgress) {
-        onProgress(Math.round((event.loaded / event.total) * 100));
+
+    xhr.upload.addEventListener('progress', (e) => {
+      if (e.lengthComputable && options?.onProgress) {
+        const progress = Math.round((e.loaded / e.total) * 100);
+        options.onProgress(progress);
       }
-    };
-    xhr.onload = function () {
-      if (xhr.status === 201 || xhr.status === 200) {
+    });
+
+    xhr.addEventListener('load', () => {
+      if (xhr.status >= 200 && xhr.status < 300) {
         try {
-          const res = JSON.parse(xhr.responseText);
-          resolve({
-            slug: res.slug,
-            file: { name: file.name },
-            ...res,
-          });
-        } catch (e) {
-          reject(new Error('Invalid response from server'));
+          const response = JSON.parse(xhr.responseText);
+          resolve(response);
+        } catch {
+          reject(new Error('Invalid response'));
         }
       } else {
-        reject(new Error(xhr.responseText));
+        reject(new Error(`Upload failed: ${xhr.status} ${xhr.statusText}`));
       }
-    };
-    xhr.onerror = function () {
-      reject(new Error('Upload failed'));
-    };
+    });
+
+    xhr.addEventListener('error', () => {
+      reject(new Error('Upload failed: Network error'));
+    });
+
+    xhr.open('POST', `${BASE_URL}/upload`);
+    const token = localStorage.getItem('voidbox_token');
+    if (token) {
+      xhr.setRequestHeader('Authorization', `Bearer ${token}`);
+    }
     xhr.send(formData);
   });
 }
@@ -63,7 +70,9 @@ export async function getFileInfo(slug: string) {
 }
 
 export function getDownloadUrl(slug: string) {
-  return `${BASE_URL}/download/${slug}`;
+  const token = localStorage.getItem('voidbox_token');
+  const url = `${BASE_URL}/download/${slug}`;
+  return token ? `${url}?token=${encodeURIComponent(token)}` : url;
 }
 
 export async function flagFile({ slug, file_id, reason }: { slug?: string; file_id?: string; reason: string }) {
@@ -76,7 +85,7 @@ export async function flagFile({ slug, file_id, reason }: { slug?: string; file_
   return res.json();
 }
 
-export async function uploadNote(title: string, content: string, options?: { expiry_at?: string; expiry_days?: number; user_id?: string; user_email?: string }) {
+export async function uploadNote(title: string, content: string, options?: { expiry_at?: string; expiry_days?: number; user_id?: string }) {
   const formData = new FormData();
   // Format note: bold title if present, then content
   let noteText = '';
@@ -93,39 +102,12 @@ export async function uploadNote(title: string, content: string, options?: { exp
   if (options?.expiry_days) formData.append('expiry_days', String(options.expiry_days));
   if (options?.user_id) formData.append('user_id', options.user_id);
   formData.append('is_note', 'true');
+  const token = localStorage.getItem('voidbox_token');
   const res = await fetch(`${BASE_URL}/upload`, {
     method: 'POST',
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
     body: formData,
   });
   if (!res.ok) throw new Error('Note upload failed');
   return res.json() as Promise<UploadResponse>;
-}
-
-export async function contactSupport(data: {
-  name: string;
-  tg_username: string;
-  email: string;
-  subject: string;
-  message: string;
-}) {
-  // Get the contact worker URL from environment variable
-  const workerUrl = import.meta.env.VITE_CONTACT_WORKER_URL;
-  
-  if (!workerUrl) {
-    throw new Error('Contact worker URL not configured. Please set VITE_CONTACT_WORKER_URL in your environment variables.');
-  }
-  
-  const response = await fetch(workerUrl, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(data),
-  });
-
-  if (!response.ok) {
-    throw new Error('Failed to send contact form');
-  }
-
-  return response.json();
 } 
