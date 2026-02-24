@@ -199,8 +199,8 @@ npm run dev
 
 ## 🏅 Credits
 
-- Developed by [lyaxsh](https://www.github.com/lyaxsh) // [lakshnahar.forwork@gmail.com](mailto:lakshnahar.forwork@gmail.com)
-- Assisted by [Bolt](https://www.bolt.new), [CursorAI](https://www.cursor.com/), [Chatgpt](https://www.chatgpt.com)
+- Developed by [lyaxsho](https://www.github.com/lyaxsho) // [contact@lyaxsh.com](mailto:contact@lyaxsh.com) 
+- Assisted by [Tanmay Singh](https://www.github.com/tanmaysingh3856)     // [Bolt](https://www.bolt.new), [CursorAI](https://www.cursor.com/), [Chatgpt](https://www.chatgpt.com)
 
 ---
 
