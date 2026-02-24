@@ -1,10 +1,12 @@
 <div align="center">
 
-<img src="https://socialify.git.ci/lyaxsh/VoidBox/image?custom_description=Telegram-Powered+Cloud+Storage+A+minimal%2C+secure%2C+and+privacy-friendly+file+%26+note+storage+web+app+built+on+top+of+Telegram.+Upload+files+or+notes+via+the+site%2C+instantly+sent+to+a+private+Telegram+channel+via+bot.+Metadata+is+safely+stored+in+Supabase.+Retrieve+your+data+anytime+with+just+a+click.&description=1&font=Rokkitt&language=1&name=1&owner=1&pattern=Transparent&theme=Dark" alt="VoidBox" width="640" height="360" />
+<img src=https://github.com/lyaxsho/VoidBox/blob/main/voidbox_light.png alt="VoidBox" width="150" style="image-rendering: -webkit-optimize-contrast;"/><br>
+
+</p>
 
 # VoidBox
-## Live at [v0idbox.vercel.app](https://v0idbox.vercel.app/)
-<img src=https://voidbox-backend.fly.dev/api/public-proxy/23c43565 /><br>
+## Live at [voidbox.lyaxsh.com](https://voidbox.lyaxsh.com/)
+<img src=https://voidbox-backend.fly.dev/api/public-proxy/1363df1a /><br>
 
 VoidBox is a modern, privacy-focused file and note sharing platform. It allows users to upload, preview, and share files or text notes securely, with optional registration. Files are stored in a private Telegram channel, and all downloads are proxied through the backend for security. User libraries and metadata are managed via Supabase.
 
