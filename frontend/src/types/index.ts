@@ -9,6 +9,10 @@ export interface FileItem {
   created_at?: string;
   size?: number;
   slug?: string; // backend slug
+  storage_mode?: 'standard' | 'secure';
+  mimetype?: string;
+  thumbnail?: string;
+  expiry_at?: string | null;
 }
 
 export interface AppState {

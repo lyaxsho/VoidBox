@@ -10,24 +10,23 @@ const PoliciesPage: React.FC = () => {
           Legal Information
         </h1>
 
-        {/* Tabs */}
-        <div className="flex bg-gray-100 dark:bg-gray-900 rounded-xl p-1 mb-8 w-fit">
+        <div className="flex gap-2 mb-8" style={{ fontFamily: 'system-ui, sans-serif' }}>
           <button
             onClick={() => setActiveTab('privacy')}
-            className={`px-6 py-3 rounded-lg font-medium transition-colors ${
-              activeTab === 'privacy' 
-                ? 'bg-white text-black' 
-                : 'text-gray-400 hover:text-white'
+            className={`px-5 h-11 rounded-lg text-base font-semibold border transition-colors ${
+              activeTab === 'privacy'
+                ? 'bg-gray-900 dark:bg-white text-white dark:text-black border-gray-900 dark:border-white'
+                : 'bg-transparent text-gray-700 dark:text-gray-300 border-gray-200 dark:border-white/10 hover:bg-gray-100 dark:hover:bg-white/5'
             }`}
           >
             Privacy Policy
           </button>
           <button
             onClick={() => setActiveTab('terms')}
-            className={`px-6 py-3 rounded-lg font-medium transition-colors ${
-              activeTab === 'terms' 
-                ? 'bg-white text-black' 
-                : 'text-gray-400 hover:text-white'
+            className={`px-5 h-11 rounded-lg text-base font-semibold border transition-colors ${
+              activeTab === 'terms'
+                ? 'bg-gray-900 dark:bg-white text-white dark:text-black border-gray-900 dark:border-white'
+                : 'bg-transparent text-gray-700 dark:text-gray-300 border-gray-200 dark:border-white/10 hover:bg-gray-100 dark:hover:bg-white/5'
             }`}
           >
             Terms of Use

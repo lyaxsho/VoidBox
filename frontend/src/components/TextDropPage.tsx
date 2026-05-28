@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { PageType } from '../types';
 import { uploadNote } from '../lib/api';
@@ -15,6 +15,14 @@ const TextDropPage: React.FC<TextDropPageProps> = ({ onPageChange, onFileAdd, th
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
   const [saving, setSaving] = useState(false);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  useEffect(() => {
+    const ta = textareaRef.current;
+    if (!ta) return;
+    ta.style.height = 'auto';
+    ta.style.height = `${Math.max(ta.scrollHeight, 140)}px`;
+  }, [content]);
 
   const handleSave = async () => {
     if (!user && triggerLoginModal) {
@@ -80,7 +88,7 @@ const TextDropPage: React.FC<TextDropPageProps> = ({ onPageChange, onFileAdd, th
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               placeholder="Give your note a title..."
-              className="w-full bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl px-4 py-3 text-gray-900 dark:text-white placeholder-gray-500 focus:border-gray-400 dark:focus:border-gray-600 focus:outline-none transition-colors"
+              className="w-full bg-white dark:bg-black border border-gray-200 dark:border-white/10 rounded-xl px-4 py-3 text-gray-900 dark:text-white placeholder-gray-500 focus:border-gray-400 dark:focus:border-white/20 focus:outline-none transition-colors"
               style={{ fontFamily: 'Inter, sans-serif' }}
               whileFocus={{ scale: 1.01 }}
             />
@@ -90,14 +98,14 @@ const TextDropPage: React.FC<TextDropPageProps> = ({ onPageChange, onFileAdd, th
             <label className="block text-gray-900 dark:text-white text-sm font-medium mb-2">
               Content
             </label>
-            <motion.textarea
+            <textarea
+              ref={textareaRef}
               value={content}
               onChange={(e) => setContent(e.target.value)}
               placeholder="Start writing..."
-              rows={20}
-              className="w-full bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl px-6 py-4 text-gray-900 dark:text-white placeholder-gray-500 focus:border-gray-400 dark:focus:border-gray-600 focus:outline-none resize-none transition-colors"
-              style={{ fontFamily: 'Inter, sans-serif', fontSize: '16px', lineHeight: '1.6' }}
-              whileFocus={{ scale: 1.005 }}
+              rows={4}
+              className="w-full bg-white dark:bg-black border border-gray-200 dark:border-white/10 rounded-xl px-6 py-4 text-gray-900 dark:text-white placeholder-gray-500 focus:border-gray-400 dark:focus:border-white/20 focus:outline-none resize-none overflow-hidden transition-colors"
+              style={{ fontFamily: 'Inter, sans-serif', fontSize: '16px', lineHeight: '1.6', minHeight: '140px' }}
             />
           </div>
         </motion.div>

@@ -17,7 +17,6 @@ const ThemeToggle = forwardRef<HTMLButtonElement, ThemeToggleProps>(({ theme, on
       onMouseDown={e => e.preventDefault()} // prevent focus ring on click
     >
       {theme === 'dark' ? <Sun size={20} /> : <Moon size={20} />}
-      {/* Custom Tooltip */}
       <div className="absolute left-16 bg-gray-900 dark:bg-white text-white dark:text-black px-3 py-2 rounded-lg text-sm font-medium opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-50 hidden sm:block">
         Change theme
       </div>

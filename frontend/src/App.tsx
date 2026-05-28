@@ -1,6 +1,5 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Menu, X } from 'lucide-react';
 import Sidebar from './components/Sidebar';
 import HomePage from './components/HomePage';
 import UploadPage from './components/UploadPage';
@@ -9,28 +8,88 @@ import LibraryPage from './components/LibraryPage';
 import FilePreviewPage from './components/FilePreviewPage';
 import PoliciesPage from './components/PoliciesPage';
 import LoginPage from './components/LoginPage';
+import LinkTelegramModal from './components/LinkTelegramModal';
 import ThemeToggle from './components/ThemeToggle';
 import { useUserFiles } from './hooks/useLocalStorage';
 import { useAuth } from './hooks/useAuth';
 import { useTheme } from './hooks/useTheme';
 import { PageType, FileItem } from './types';
 import ProfileMenu from './components/ProfileMenu';
-import { Routes, Route, useNavigate, useParams } from 'react-router-dom';
+import VerifyEmailPage from './components/VerifyEmailPage';
+import MagicLinkPage from './components/MagicLinkPage';
+import AdminPage from './components/AdminPage';
+import GlobalDropOverlay from './components/GlobalDropOverlay';
+import MobileBottomNav from './components/MobileBottomNav';
+import { Routes, Route, useNavigate, useParams, useLocation } from 'react-router-dom';
+
+function PublicFilePreview({ theme, user }: { theme: 'dark' | 'light'; user: any }) {
+  const { slug } = useParams();
+  const navigate = useNavigate();
+  return (
+    <FilePreviewPage
+      file={{ id: slug!, name: '', type: 'file', uploadedAt: new Date(), slug }}
+      onPageChange={() => navigate(user ? '/library' : '/')}
+      theme={theme}
+    />
+  );
+}
+
+const PAGE_PATHS: Record<PageType, string> = {
+  home: '/',
+  upload: '/upload',
+  text: '/text',
+  library: '/library',
+  preview: '/preview',
+  policies: '/policies',
+};
+
+function pathToPage(pathname: string): PageType {
+  if (pathname.startsWith('/upload')) return 'upload';
+  if (pathname.startsWith('/text')) return 'text';
+  if (pathname.startsWith('/library')) return 'library';
+  if (pathname.startsWith('/file/')) return 'library';
+  if (pathname.startsWith('/preview')) return 'preview';
+  if (pathname.startsWith('/policies')) return 'policies';
+  return 'home';
+}
 
 function App() {
-  const [currentPage, setCurrentPage] = useState<PageType>('home');
+  const navigate = useNavigate();
+  const location = useLocation();
+  const currentPage: PageType = pathToPage(location.pathname);
   const [selectedFile, setSelectedFile] = useState<FileItem | undefined>();
-  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [showLoginModal, setShowLoginModal] = useState(false);
   const toggleRef = useRef<HTMLButtonElement>(null);
-  const { files, setUserFiles, fetchUserFiles } = useUserFiles();
-  const { user, loading, sendCode, verifyCode, verify2FA, signOut } = useAuth();
+  const { files, setUserFiles, fetchUserFiles, loading: filesLoading, hasFetched: filesFetched } = useUserFiles();
+  const {
+    user,
+    loading,
+    signUp,
+    signIn,
+    checkEmail,
+    resendVerification,
+    requestMagicLink,
+    setSecureUpload,
+    unlinkTelegram,
+    sendLinkCode,
+    verifyLinkCode,
+    verifyLink2FA,
+    signOut,
+  } = useAuth();
+  const [showLinkTelegram, setShowLinkTelegram] = useState(false);
   const { theme, toggleTheme: baseToggleTheme } = useTheme();
   // Add profileOpen state to App
   const [profileOpen, setProfileOpen] = useState(false);
   const [showWelcomeOverlay, setShowWelcomeOverlay] = useState(false);
   const welcomeShownRef = useRef(false);
   const [justLoggedIn, setJustLoggedIn] = useState(false);
+  const [pendingDropFile, setPendingDropFile] = useState<File | null>(null);
+
+  const handleGlobalDrop = useCallback((files: File[]) => {
+    if (files.length === 0) return;
+    setPendingDropFile(files[0]);
+    if (location.pathname !== '/upload') navigate('/upload');
+  }, [location.pathname, navigate]);
 
   // Add a function to allow children to trigger the login modal (must be before any return)
   const triggerLoginModal = useCallback(() => setShowLoginModal(true), []);
@@ -41,23 +100,17 @@ function App() {
   }, [baseToggleTheme]);
 
   const handlePageChange = (page: PageType) => {
-    setCurrentPage(page);
-    if (page !== 'preview') {
-      setSelectedFile(undefined);
-    }
-    if (typeof window !== 'undefined') {
-      window.location.hash = `#${page}`;
-    }
+    if (page !== 'preview') setSelectedFile(undefined);
+    navigate(PAGE_PATHS[page]);
   };
 
   const handleFileSelect = (file: FileItem) => {
-
     if (!user) {
-      if (triggerLoginModal) triggerLoginModal();
+      triggerLoginModal();
       return;
     }
-    setSelectedFile(file);
-    setCurrentPage('preview');
+    const slug = (file as any).slug || file.id;
+    navigate(`/file/${slug}`);
   };
 
   const handleFileAdd = async (file: any) => {
@@ -78,9 +131,8 @@ function App() {
     } else {
       setUserFiles([]); // Clear mydrops on logout
       setProfileOpen(false); // Close profile modal on sign out
-      setCurrentPage('home');
+      navigate('/');
       welcomeShownRef.current = false; // Reset welcome overlay for next login
-
     }
   };
 
@@ -114,6 +166,43 @@ function App() {
       setUserFiles([]);
     }
   }, [user]);
+
+  // Global keyboard shortcuts: Esc to close modals, g+<key> to navigate
+  useEffect(() => {
+    let lastG = 0;
+    const isTyping = (el: EventTarget | null): boolean => {
+      if (!(el instanceof HTMLElement)) return false;
+      const tag = el.tagName;
+      return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || el.isContentEditable;
+    };
+    const handler = (e: KeyboardEvent) => {
+      // Esc: close any open modal
+      if (e.key === 'Escape') {
+        if (showLoginModal) { setShowLoginModal(false); return; }
+        if (showLinkTelegram) { setShowLinkTelegram(false); return; }
+        if (profileOpen) { setProfileOpen(false); return; }
+        return;
+      }
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+      if (isTyping(e.target)) return;
+      // g + <letter> sequence
+      if (e.key === 'g') {
+        lastG = Date.now();
+        return;
+      }
+      if (Date.now() - lastG < 1000) {
+        const map: Record<string, string> = { l: '/library', u: '/upload', t: '/text', h: '/', p: '/policies' };
+        const dest = map[e.key.toLowerCase()];
+        if (dest) {
+          e.preventDefault();
+          lastG = 0;
+          navigate(dest);
+        }
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [showLoginModal, showLinkTelegram, profileOpen, navigate]);
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-white dark:bg-black">
@@ -132,7 +221,17 @@ function App() {
         return <HomePage onPageChange={handlePageChange} theme={theme} isMenuOpen={profileOpen} />;
       case 'upload':
         return (
-          <UploadPage onPageChange={handlePageChange} onFileAdd={handleFileAdd} theme={theme} user={user} triggerLoginModal={triggerLoginModal} />
+          <UploadPage
+            onPageChange={handlePageChange}
+            onFileAdd={handleFileAdd}
+            theme={theme}
+            user={user}
+            triggerLoginModal={triggerLoginModal}
+            onSetSecureUpload={setSecureUpload}
+            onRequestLinkTelegram={() => setShowLinkTelegram(true)}
+            pendingDropFile={pendingDropFile}
+            onConsumePendingDrop={() => setPendingDropFile(null)}
+          />
         );
       case 'text':
         return (
@@ -149,6 +248,8 @@ function App() {
             user={user}
             triggerLoginModal={triggerLoginModal}
             fetchUserFiles={fetchUserFiles}
+            filesLoading={filesLoading}
+            filesFetched={filesFetched}
           />
         );
       case 'preview':
@@ -166,22 +267,15 @@ function App() {
     }
   };
 
-  // Utility to get the screen diagonal
-
-
-
-  const PublicFilePreviewPageWithTheme = () => {
-    const { slug } = useParams();
-    const navigate = useNavigate();
-    return <FilePreviewPage file={{ id: slug!, name: '', type: 'file', uploadedAt: new Date(), slug }} onPageChange={() => navigate('/')} theme={theme} />;
-  };
   return (
     <div className="bg-white dark:bg-black min-h-screen transition-colors flex flex-col min-h-screen">
+      <GlobalDropOverlay onFiles={handleGlobalDrop} />
       <Routes>
-        <Route path="/file/:slug" element={<PublicFilePreviewPageWithTheme />} />
+        <Route path="/verify-email" element={<VerifyEmailPage />} />
+        <Route path="/magic-link" element={<MagicLinkPage />} />
+        <Route path="/admin" element={<AdminPage currentUser={user} />} />
         <Route path="*" element={
           <>
-            {/* Welcome Overlay */}
             <AnimatePresence>
               {showWelcomeOverlay && user?.first_name && (
                 <motion.div
@@ -201,60 +295,91 @@ function App() {
                 </motion.div>
               )}
             </AnimatePresence>
-            {/* Login Modal — Telegram Login Widget */}
             <AnimatePresence>
               {showLoginModal && (
                 <motion.div
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
                   exit={{ opacity: 0 }}
-                  className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-6"
+                  className="fixed inset-0 z-50 flex items-center justify-center p-6"
+                  style={{ background: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(4px)' }}
                   onClick={() => setShowLoginModal(false)}
                 >
-                  <motion.div
-                    initial={{ scale: 0.9, opacity: 0 }}
-                    animate={{ scale: 1, opacity: 1 }}
-                    exit={{ scale: 0.9, opacity: 0 }}
-                    onClick={(e) => e.stopPropagation()}
-                    className="w-full max-w-md"
-                  >
+                  <div onClick={(e) => e.stopPropagation()} className="w-full max-w-md">
                     <LoginPage
-                      onSendCode={sendCode}
-                      onVerifyCode={verifyCode}
-                      onVerify2FA={verify2FA}
-                      theme={theme}
+                      onSignIn={signIn}
+                      onSignUp={signUp}
+                      onCheckEmail={checkEmail}
+                      onResendVerification={resendVerification}
+                      onRequestMagicLink={requestMagicLink}
                       onClose={handleLoginSuccess}
+                    />
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+
+            <AnimatePresence>
+              {showLinkTelegram && user && (
+                <motion.div
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  className="fixed inset-0 bg-black bg-opacity-50 z-[60] flex items-center justify-center p-6"
+                  onClick={() => setShowLinkTelegram(false)}
+                >
+                  <motion.div onClick={(e) => e.stopPropagation()}>
+                    <LinkTelegramModal
+                      onSendCode={sendLinkCode}
+                      onVerifyCode={verifyLinkCode}
+                      onVerify2FA={verifyLink2FA}
+                      onSuccess={async () => {
+                        await setSecureUpload(true);
+                      }}
+                      onClose={() => setShowLinkTelegram(false)}
                     />
                   </motion.div>
                 </motion.div>
               )}
             </AnimatePresence>
 
-            {/* Mobile Header */}
-            <div className="lg:hidden fixed top-0 left-0 right-0 bg-white dark:bg-black border-b border-gray-200 dark:border-gray-900 p-4 z-30">
+            <div className="lg:hidden fixed top-0 left-0 right-0 bg-white/95 dark:bg-black/95 backdrop-blur-md border-b border-gray-200 dark:border-white/10 p-4 z-30">
               <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-3">
+                <div className="flex items-center">
                   {theme === 'dark' ? (
                     <img src="/dark.png" alt="VoidBox" className="w-8 h-8" />
                   ) : (
                     <img src="/light.png" alt="VoidBox" className="w-8 h-8" />
                   )}
-                  <h1 className="text-gray-900 dark:text-white font-bold text-xl" style={{ fontFamily: 'Playfair Display, serif' }}>VoidBox</h1>
                 </div>
-                <div className="flex items-center space-x-3">
+                <div className="flex items-center space-x-2">
                   <ThemeToggle theme={theme} onToggle={toggleTheme} />
-                  <button
-                    onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-                    className="text-gray-900 dark:text-white hover:text-gray-600 dark:hover:text-gray-300"
-                  >
-                    {isMobileMenuOpen ? <X size={24} /> : <Menu size={24} />}
-                  </button>
+                  {user ? (
+                    <button
+                      onClick={() => setProfileOpen(true)}
+                      className="w-9 h-9 rounded-xl overflow-hidden flex items-center justify-center bg-gray-100 dark:bg-white/5 border border-gray-200 dark:border-white/10"
+                      title="Profile"
+                    >
+                      {user.photo_url ? (
+                        <img src={user.photo_url} alt={user.first_name} className="w-full h-full object-cover" />
+                      ) : (
+                        <span className="text-sm font-semibold text-gray-700 dark:text-gray-200">
+                          {(user.first_name?.[0] || '').toUpperCase()}
+                        </span>
+                      )}
+                    </button>
+                  ) : (
+                    <button
+                      onClick={triggerLoginModal}
+                      className="px-3 h-9 rounded-xl bg-gray-900 dark:bg-white text-white dark:text-black text-sm font-semibold"
+                    >
+                      Sign in
+                    </button>
+                  )}
                 </div>
               </div>
             </div>
 
-            {/* Logo - Desktop */}
-            {/* Desktop Sidebar */}
             <div className="hidden lg:block">
               <Sidebar
                 currentPage={currentPage}
@@ -267,57 +392,37 @@ function App() {
                 toggleRef={toggleRef}
                 setProfileOpen={setProfileOpen}
                 profileOpen={profileOpen}
+                onUnlinkTelegram={user ? async () => { await unlinkTelegram(); } : undefined}
+                onLinkTelegram={user ? () => setShowLinkTelegram(true) : undefined}
               />
             </div>
 
-            {/* Mobile Sidebar */}
-            <Sidebar
+            <MobileBottomNav
               currentPage={currentPage}
               onPageChange={handlePageChange}
-              onSignOut={user ? handleSignOut : undefined}
-              isMobile={true}
-              isOpen={isMobileMenuOpen}
-              onClose={() => setIsMobileMenuOpen(false)}
-              theme={theme}
-              user={user}
-              triggerLoginModal={triggerLoginModal}
-              toggleTheme={toggleTheme}
-              toggleRef={toggleRef}
+              isSignedIn={!!user}
+              onSignIn={triggerLoginModal}
             />
 
-            {/* Main Content */}
-            <div className="lg:ml-20 pt-16 lg:pt-0 flex-1">
-              <AnimatePresence mode="wait">
-                <motion.div
-                  key={currentPage}
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -20 }}
-                  transition={{ duration: 0.3 }}
-                >
-                  {renderPage()}
-                </motion.div>
-              </AnimatePresence>
+            <div className="lg:ml-20 pt-16 lg:pt-0 pb-20 lg:pb-0 flex-1">
+              <Routes>
+                <Route path="/file/:slug" element={<PublicFilePreview theme={theme} user={user} />} />
+                <Route path="*" element={
+                  <AnimatePresence mode="wait">
+                    <motion.div
+                      key={currentPage}
+                      initial={{ opacity: 0, y: 20 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -20 }}
+                      transition={{ duration: 0.3 }}
+                    >
+                      {renderPage()}
+                    </motion.div>
+                  </AnimatePresence>
+                } />
+              </Routes>
             </div>
 
-            {/* Mobile FAB for Upload */}
-            <AnimatePresence>
-              {currentPage !== 'upload' && currentPage !== 'text' && !profileOpen && (
-                <motion.button
-                  initial={{ scale: 0, rotate: -180 }}
-                  animate={{ scale: 1, rotate: 0 }}
-                  exit={{ scale: 0, rotate: 180 }}
-                  onClick={() => handlePageChange('upload')}
-                  className="lg:hidden fixed bottom-6 right-6 w-14 h-14 bg-gray-900 dark:bg-white text-white dark:text-black rounded-2xl flex items-center justify-center shadow-lg z-10"
-                  whileHover={{ scale: 1.1 }}
-                  whileTap={{ scale: 0.9 }}
-                >
-                  <span className="text-2xl font-bold">+</span>
-                </motion.button>
-              )}
-            </AnimatePresence>
-
-            {/* Render ProfileMenu overlay at the root, above all content, when open */}
             {profileOpen && (
               <div className="fixed inset-0 z-[99999] flex items-center justify-center">
                 <ProfileMenu
@@ -327,10 +432,14 @@ function App() {
                     firstName: user.first_name || '',
                     lastName: user.last_name || '',
                     username: user.username || '',
+                    email: user.email || '',
                     photoUrl: user.photo_url || '',
                     createdAt: user.created_at || '',
-                  } : { firstName: '', lastName: '', username: '', photoUrl: '', createdAt: '' }}
+                    telegramLinked: user.telegram_linked,
+                  } : { firstName: '', lastName: '', username: '', email: '', photoUrl: '', createdAt: '' }}
                   onSignOut={user ? handleSignOut : () => { }}
+                  onUnlinkTelegram={user ? async () => { await unlinkTelegram(); } : undefined}
+                  onLinkTelegram={user ? () => setShowLinkTelegram(true) : undefined}
                 />
               </div>
             )}

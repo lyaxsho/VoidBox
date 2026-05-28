@@ -23,6 +23,8 @@ interface SidebarProps {
   toggleRef?: React.RefObject<HTMLButtonElement>;
   setProfileOpen?: (open: boolean) => void;
   profileOpen?: boolean;
+  onUnlinkTelegram?: () => Promise<void>;
+  onLinkTelegram?: () => void;
 }
 
 const Sidebar: React.FC<SidebarProps> = ({
@@ -38,7 +40,9 @@ const Sidebar: React.FC<SidebarProps> = ({
   toggleTheme,
   toggleRef,
   setProfileOpen,
-  profileOpen: propProfileOpen
+  profileOpen: propProfileOpen,
+  onUnlinkTelegram,
+  onLinkTelegram,
 }) => {
   const navItems = [
     { id: 'home' as PageType, icon: Home, label: 'Home' },
@@ -79,14 +83,18 @@ const Sidebar: React.FC<SidebarProps> = ({
           className="fixed left-0 top-0 h-full w-64 bg-white dark:bg-black border-r border-gray-200 dark:border-gray-800 z-50 lg:hidden"
         >
           <div className="p-6">
-            <div className="flex items-center space-x-3 mb-8">
+            <button
+              type="button"
+              onClick={() => handleNavClick('home')}
+              className="mb-8 w-10 h-10 rounded-xl flex items-center justify-center"
+              aria-label="Go to Home"
+            >
               {theme === 'dark' ? (
                 <img src="/dark.png" alt="VoidBox" className="w-8 h-8" />
               ) : (
                 <img src="/light.png" alt="VoidBox" className="w-8 h-8" />
               )}
-              <h1 className="text-gray-900 dark:text-white font-bold text-xl" style={{ fontFamily: 'Playfair Display, serif' }}>VoidBox</h1>
-            </div>
+            </button>
             <nav className="space-y-2">
               {navItems.map((item, index) => {
                 const Icon = item.icon;
@@ -130,21 +138,22 @@ const Sidebar: React.FC<SidebarProps> = ({
   }
 
   return (
-    <div className="fixed left-0 top-0 h-full w-20 bg-white dark:bg-black border-r border-gray-200 dark:border-gray-900 flex flex-col items-center py-6">
-      <motion.div
-        className="mb-8"
+    <div className="fixed left-0 top-0 h-full w-20 bg-white dark:bg-black border-r border-white dark:border-black flex flex-col items-center py-6 z-20">
+      <motion.button
+        type="button"
+        onClick={() => handleNavClick('home')}
+        className="mb-8 w-12 h-12 rounded-xl flex items-center justify-center"
         initial={{ scale: 0 }}
         animate={{ scale: 1 }}
         transition={{ delay: 0.1 }}
+        aria-label="Go to Home"
       >
-        <div className="w-12 h-12 rounded-xl flex items-center justify-center">
-          {theme === 'dark' ? (
-            <img src="/dark.png" alt="VoidBox" className="w-8 h-8" />
-          ) : (
-            <img src="/light.png" alt="VoidBox" className="w-8 h-8" />
-          )}
-        </div>
-      </motion.div>
+        {theme === 'dark' ? (
+          <img src="/dark.png" alt="VoidBox" className="w-8 h-8" />
+        ) : (
+          <img src="/light.png" alt="VoidBox" className="w-8 h-8" />
+        )}
+      </motion.button>
 
       <nav className="flex flex-col space-y-4 flex-1">
         {navItems.map((item, index) => {
@@ -165,14 +174,12 @@ const Sidebar: React.FC<SidebarProps> = ({
             >
               <Icon size={20} />
 
-              {/* Tooltip */}
               <div className="absolute left-16 bg-gray-900 dark:bg-white text-white dark:text-black px-3 py-2 rounded-lg text-sm font-medium opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-50">
                 {item.label}
               </div>
             </motion.button>
           );
         })}
-        {/* Theme Toggle Button */}
         <motion.div
           className="flex justify-center mt-4"
           initial={{ opacity: 0, y: 20 }}
@@ -194,35 +201,30 @@ const Sidebar: React.FC<SidebarProps> = ({
           <>
             <motion.button
               onClick={() => setProfileOpenProp(true)}
-              className={`w-12 h-12 rounded-xl flex items-center justify-center transition-colors group relative ${profileOpen
-                ? 'bg-gray-900 dark:bg-white text-white dark:text-black'
-                : 'text-gray-500 dark:text-gray-500 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-900'
+              className={`w-12 h-12 rounded-xl flex items-center justify-center transition-colors group relative overflow-hidden ${profileOpen
+                ? 'ring-2 ring-gray-900 dark:ring-white'
+                : 'hover:ring-2 hover:ring-gray-300 dark:hover:ring-gray-600'
                 }`}
               whileHover={{ scale: 1.1 }}
               whileTap={{ scale: 0.95 }}
               title="Profile"
             >
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                width="23"
-                height="23"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                className="lucide lucide-user-round-icon lucide-user-round"
-              >
-                <circle cx="12" cy="8" r="5" />
-                <path d="M20 21a8 8 0 0 0-16 0" />
-              </svg>
-              {/* Tooltip */}
+              {user?.photo_url ? (
+                <img
+                  src={user.photo_url}
+                  alt={user.first_name}
+                  className="w-12 h-12 rounded-xl object-cover"
+                  onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                />
+              ) : (
+                <div className={`w-12 h-12 rounded-xl flex items-center justify-center text-sm font-semibold select-none ${profileOpen ? 'bg-gray-900 dark:bg-white text-white dark:text-black' : 'bg-gray-100 dark:bg-gray-900 text-gray-600 dark:text-gray-400'}`}>
+                  {(user?.first_name?.[0] ?? '').toUpperCase()}{(user?.last_name?.[0] ?? '').toUpperCase() || ''}
+                </div>
+              )}
               <div className="absolute left-16 bg-gray-900 dark:bg-white text-white dark:text-black px-3 py-2 rounded-lg text-sm font-medium opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-50">
                 Profile
               </div>
             </motion.button>
-            {/* Only render the high z-index ProfileMenu wrapper when profileOpen is true */}
             {profileOpen && (
               <div className="absolute left-0 top-0 w-full h-full z-50 flex items-center justify-center">
                 <ProfileMenu
@@ -232,10 +234,14 @@ const Sidebar: React.FC<SidebarProps> = ({
                     firstName: user.first_name || '',
                     lastName: user.last_name || '',
                     username: user.username || '',
+                    email: user.email || '',
                     photoUrl: user.photo_url || '',
                     createdAt: user.created_at || '',
+                    telegramLinked: user.telegram_linked,
                   }}
-                  onSignOut={onSignOut}
+                  onSignOut={onSignOut!}
+                  onUnlinkTelegram={onUnlinkTelegram}
+                  onLinkTelegram={onLinkTelegram}
                 />
               </div>
             )}
@@ -257,7 +263,6 @@ const Sidebar: React.FC<SidebarProps> = ({
               autoplay={false}
               style={{ width: 31, height: 31 }}
             />
-            {/* Tooltip */}
             <div className="absolute left-16 bg-gray-900 dark:bg-white text-white dark:text-black px-3 py-2 rounded-lg text-sm font-medium opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-50">
               Guest Mode
             </div>
