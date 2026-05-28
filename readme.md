@@ -417,9 +417,5 @@ Connect your repository and point the build configuration to the `frontend/` fol
 ## 🏅 Credits
 
 - Developed by [lyaxsho](https://www.github.com/lyaxsho) // [contact@lyaxsh.com](mailto:contact@lyaxsh.com) 
-- Assisted by [Tanmay Singh](https://www.github.com/tanmaysingh3856)
+- Assisted by [Tanmay Singh](https://www.github.com/tanmaysingh3856) // [tanmaysingh3856@gmail.com](mailto:tanmaysingh3856@gmail.com)
 
----
-<div align="center">
-  Generated with 🤍 for the Open Source Community.
-</div>

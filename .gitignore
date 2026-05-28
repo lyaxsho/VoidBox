@@ -23,3 +23,19 @@ dist-ssr
 *.sln
 *.sw?
 .env
+
+# Old project version — kept locally, not for repo
+voidbox-old/
+
+# Backend nodemon log dumps
+backend/backend_out*.log
+
+# IDE and tool caches
+.claude/
+.vite/
+
+# Root images
+voidbox.png
+voidbox_dark.png
+voidbox_light.png
+
